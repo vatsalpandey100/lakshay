@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#06070b">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Lakshay — Watch Anime Together</title>
+  <meta name="description" content="Watch anime and videos together in real-time synchronized theater in Lakshay.">
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="/css/main.css">
+  
+  <!-- Socket.io client script -->
+  <script src="/socket.io/socket.io.js"></script>
+  <!-- YouTube IFrame API -->
+  <script src="https://www.youtube.com/iframe_api"></script>
+</head>
+<body>
+  <div class="theater-container">
+    <!-- Ambient atmosphere blobs -->
+    <div class="bg-ambient-blob blob-1"></div>
+    <div class="bg-ambient-blob blob-2"></div>
+
+    <!-- Theater Header Navigation -->
+    <header class="theater-navbar">
+      <div class="room-info-cluster">
+        <a href="/" class="nav-brand" style="font-size: 1.1rem;">
+          <div class="brand-icon" style="width: 32px; height: 32px; font-size: 1.1rem;">⚡</div>
+          <span>Lakshay</span>
+        </a>
+
+        <div style="width: 1px; height: 24px; background: var(--border-subtle); margin: 0 0.25rem;"></div>
+
+        <div class="room-title-display">
+          <span id="room-name-header">Cosmic Watch Party</span>
+          <button type="button" class="room-code-tag" id="copy-code-btn" title="Click to copy room code & invite link">
+            <span>#</span><span id="room-id-display">room-id</span>
+            <span style="font-size: 0.7rem; opacity: 0.8;">📋</span>
+          </button>
+        </div>
+
+        <!-- Apple & Pixel Style Dynamic Island Status Capsule -->
+        <div class="dynamic-island-capsule" id="header-dynamic-island">
+          <div class="sound-wave-bars" id="island-sound-waves" style="display: none;">
+            <div class="sound-wave-bar"></div>
+            <div class="sound-wave-bar"></div>
+            <div class="sound-wave-bar"></div>
+          </div>
+          <button type="button" class="sync-beacon" id="sync-beacon-btn" title="Click to force resync playback time" style="border: none; background: transparent; padding: 0;">
+            <span class="pulse-circle"></span>
+            <span id="sync-status-text">In Sync (&lt; 0.05s)</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="nav-actions">
+        <button type="button" class="btn btn-secondary btn-sm" id="btn-open-share">
+          <span>🔗 Share Party</span>
+        </button>
+        <button type="button" class="btn btn-secondary btn-sm" id="btn-room-settings" title="Room Settings">
+          <span>⚙️ Settings</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Theater Workspace: Video Stage (Left) & Sidebar (Right) -->
+    <div class="theater-workspace">
+      <!-- Video Stage Area -->
+      <section class="video-stage">
+        <!-- Player Container -->
+        <div class="video-player-wrapper" id="player-wrapper">
+          <!-- Reactive Ambient Lighting Glow Canvas -->
+          <div class="ambient-canvas-wrapper">
+            <canvas id="ambient-canvas" class="ambient-canvas"></canvas>
+          </div>
+
+          <!-- Video Viewport -->
+          <div class="video-viewport" id="video-viewport">
+            <!-- Native HTML5 Video Element -->
+            <video id="html5-player" playsinline preload="auto">
+              Your browser does not support HTML5 video.
+            </video>
+
+            <!-- YouTube IFrame Target -->
+            <div id="youtube-player-frame" style="display: none;"></div>
+
+            <!-- Center Splash Action Icon (Play / Pause Indicator) -->
+            <div class="center-action-overlay">
+              <div class="action-splash-icon" id="action-splash">▶</div>
+            </div>
+
+            <!-- Floating Reaction Overlay -->
+            <div class="floating-emojis-container" id="floating-reactions"></div>
+
+            <!-- Viewer Tap-to-Watch / Sync Overlay (Bypasses Browser Autoplay Restrictions) -->
+            <div class="viewer-start-overlay" id="viewer-start-overlay" style="display: none;">
+              <div class="viewer-start-pill">
+                <span class="viewer-play-icon">▶</span>
+                <div class="viewer-start-text">
+                  <div style="font-weight: 700; font-size: 1.05rem;">Click to Start Video</div>
+                  <div style="font-size: 0.78rem; opacity: 0.8; margin-top: 2px;">Sync in real-time with Lakshay</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Unmute Prompt for Mobile Autoplay Restrictions -->
+            <div class="unmute-banner" id="unmute-banner" style="display: none;">
+              <div class="unmute-pill">
+                <span class="unmute-icon">🔊</span>
+                <span>Tap anywhere to unmute sound</span>
+              </div>
+            </div>
+
+            <!-- Player Video Stream Transmission Beacon -->
+            <div class="player-stream-beacon" id="player-stream-beacon" style="display: none;">
+              <span class="beacon-pulse-dot"></span>
+              <span id="player-stream-beacon-text">Streaming Anime to Remote Friend...</span>
+            </div>
+
+            <!-- Custom Video Controls Overlay -->
+            <div class="custom-controls-bar" id="custom-controls">
+              <!-- Scrubber Timeline -->
+              <div class="timeline-track-wrap" id="timeline-track">
+                <div class="timeline-buffer" id="timeline-buffer"></div>
+                <div class="timeline-fill" id="timeline-fill"></div>
+                <div class="timeline-scrubber" id="timeline-scrubber"></div>
+                <div class="timeline-hover-time" id="timeline-hover-time">00:00</div>
+              </div>
+
+              <!-- Controls Actions Row -->
+              <div class="controls-row">
+                <div class="controls-left">
+                  <button type="button" class="ctrl-btn" id="ctrl-play-pause" title="Play / Pause (Space)">
+                    <span id="play-pause-icon">▶</span>
+                  </button>
+                  <button type="button" class="ctrl-btn" id="ctrl-rewind" title="Rewind 10s (←)">
+                    <span>↺ 10s</span>
+                  </button>
+                  <button type="button" class="ctrl-btn" id="ctrl-forward" title="Fast Forward 10s (→)">
+                    <span>10s ↻</span>
+                  </button>
+                  
+                  <div class="volume-control-wrap">
+                    <button type="button" class="ctrl-btn" id="ctrl-mute-btn" title="Mute (M)">
+                      <span id="mute-icon">🔊</span>
+                    </button>
+                    <input type="range" id="ctrl-volume-slider" class="volume-slider" min="0" max="1" step="0.05" value="0.9">
+                  </div>
+
+                  <div class="time-display">
+                    <span class="time-current" id="time-current">00:00</span>
+                    <span> / </span>
+                    <span id="time-duration">00:00</span>
+                  </div>
+                </div>
+
+                <div class="controls-right">
+                  <button type="button" class="btn btn-secondary btn-sm" id="btn-force-sync" style="padding: 0.3rem 0.6rem; font-size: 0.75rem;" title="Synchronize current time with host">
+                    <span>⚡ Resync</span>
+                  </button>
+
+                  <select id="ctrl-playback-rate" class="input-field" style="width: auto; padding: 0.25rem 0.5rem; font-size: 0.75rem; height: 32px;" title="Playback Speed">
+                    <option value="0.5">0.5x</option>
+                    <option value="0.75">0.75x</option>
+                    <option value="1" selected>1.0x</option>
+                    <option value="1.25">1.25x</option>
+                    <option value="1.5">1.5x</option>
+                    <option value="2">2.0x</option>
+                  </select>
+
+                  <button type="button" class="ctrl-btn" id="ctrl-pip-btn" title="Picture in Picture">
+                    <span>🪟</span>
+                  </button>
+
+                  <button type="button" class="ctrl-btn" id="ctrl-fullscreen-btn" title="Fullscreen (F)">
+                    <span id="fullscreen-icon">⛶</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Stage Bottom Details: Active Title, Quick Floating Reactions & Source Loader -->
+        <div class="stage-details">
+          <!-- Active Video Header & Reactions -->
+          <div class="video-header-card">
+            <div>
+              <div class="now-playing-tag">Now Streaming in Sync</div>
+              <h1 class="video-active-title" id="active-video-title">Big Buck Bunny (Animation 4K)</h1>
+            </div>
+
+            <!-- Quick Emoji Reactions Bar -->
+            <div class="reaction-bar">
+              <button type="button" class="react-btn" data-emoji="🔥" title="Fire">🔥</button>
+              <button type="button" class="react-btn" data-emoji="❤️" title="Love">❤️</button>
+              <button type="button" class="react-btn" data-emoji="🍿" title="Popcorn">🍿</button>
+              <button type="button" class="react-btn" data-emoji="😂" title="Laugh">😂</button>
+              <button type="button" class="react-btn" data-emoji="🚀" title="Rocket">🚀</button>
+              <button type="button" class="react-btn" data-emoji="😱" title="Shocked">😱</button>
+              <button type="button" class="react-btn" data-emoji="👏" title="Clap">👏</button>
+              <button type="button" class="react-btn" data-emoji="🎉" title="Party">🎉</button>
+            </div>
+          </div>
+
+          <!-- Video Loader & Queue Adder Section -->
+          <div class="media-source-section">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;">
+              <h3 style="font-size: 0.95rem; font-weight: 700;">Load Video, Anime or Stream</h3>
+              <div>
+                <input type="file" id="local-video-file-input" accept="video/mp4,video/webm,video/mkv,video/quicktime,video/*" style="display: none;">
+                <button type="button" class="btn btn-secondary btn-sm" id="btn-select-local-video" title="Load an anime video file from your computer">
+                  <span>📂 Open Anime File</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Stream Transfer Progress for Remote Video Sync -->
+            <div id="stream-transfer-banner" class="stream-transfer-card" style="display: none;">
+              <div class="stream-transfer-header">
+                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                  <span class="stream-transfer-icon">📡</span>
+                  <span id="stream-transfer-title" style="font-weight: 700; color: #c084fc;">Transmitting Video to Remote Device...</span>
+                </div>
+                <span id="stream-transfer-percent" class="stream-transfer-badge">0%</span>
+              </div>
+              <div class="stream-progress-track">
+                <div id="stream-transfer-bar" class="stream-progress-fill" style="width: 0%;"></div>
+              </div>
+              <div id="stream-transfer-sub" style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.35rem;">
+                Your friend's screen will automatically stream and sync to your exact second.
+              </div>
+            </div>
+
+            <form id="media-source-form" class="source-input-group">
+              <input type="text" id="video-url-input" class="input-field" placeholder="Paste YouTube link (e.g. youtube.com/watch?v=...) or direct MP4/WebM video URL" required>
+              <button type="submit" class="btn btn-primary" id="btn-play-now">
+                <span>▶ Play Now</span>
+              </button>
+              <button type="button" class="btn btn-secondary" id="btn-add-to-queue">
+                <span>+ Queue</span>
+              </button>
+            </form>
+
+            <!-- Curated Demo Presets Carousel -->
+            <div class="preset-carousel-title">
+              <span>Quick Demo Movies & Streams (1-Click Sync)</span>
+              <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 400;">No URL required</span>
+            </div>
+            <div class="preset-cards-grid" id="preset-cards-container">
+              <!-- Dynamically populated from /api/presets -->
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Right Theater Sidebar -->
+      <aside class="theater-sidebar">
+        <!-- Sidebar Navigation Tabs -->
+        <div class="sidebar-tabs">
+          <button type="button" class="tab-btn active" data-tab="tab-chat">
+            <span>💬 Chat</span>
+            <span class="tab-badge" id="chat-count-badge" style="display: none;">0</span>
+          </button>
+          <button type="button" class="tab-btn" data-tab="tab-queue">
+            <span>📋 Queue</span>
+            <span class="tab-badge" id="queue-count-badge">2</span>
+          </button>
+          <button type="button" class="tab-btn" data-tab="tab-members">
+            <span>👥 Viewers</span>
+            <span class="tab-badge" id="member-count-badge">1</span>
+          </button>
+        </div>
+
+        <!-- Chat Pane -->
+        <div class="tab-pane active" id="tab-chat">
+          <div class="chat-messages-container" id="chat-messages-list">
+            <!-- Messages rendered dynamically -->
+          </div>
+
+          <form id="chat-send-form" class="chat-input-bar">
+            <button type="button" class="chat-stamp-btn" id="btn-stamp-time" title="Click to stamp video time into message">
+              <span id="chat-current-ts-pill">⏱️ 00:00</span>
+            </button>
+            <input type="text" id="chat-text-input" class="input-field" placeholder="Message with video timestamp..." maxlength="500" autocomplete="off" required>
+            <button type="submit" class="btn btn-primary btn-icon" title="Send (Enter)">
+              <span>➤</span>
+            </button>
+          </form>
+        </div>
+
+        <!-- Queue Pane -->
+        <div class="tab-pane" id="tab-queue">
+          <div class="queue-container" id="queue-items-list">
+            <!-- Rendered dynamically -->
+          </div>
+        </div>
+
+        <!-- Members Pane -->
+        <div class="tab-pane" id="tab-members">
+          <div class="members-container" id="members-items-list">
+            <!-- Rendered dynamically -->
+          </div>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <!-- Modal: Share Room Invite -->
+  <div class="modal-backdrop" id="modal-share">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 class="modal-title">Invite Friends to Watch</h3>
+        <button type="button" class="modal-close-btn" data-close="modal-share">✕</button>
+      </div>
+      <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1.25rem;">
+        Anyone with this link can join your watch party and watch the video in real-time sync with you.
+      </p>
+
+      <div class="form-group">
+        <label class="form-label">Party Invite Link</label>
+        <div style="display: flex; gap: 0.5rem;">
+          <input type="text" id="share-link-input" class="input-field" readonly>
+          <button type="button" class="btn btn-primary" id="btn-copy-share-link">
+            <span>Copy</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="form-group" style="margin-top: 1rem;">
+        <label class="form-label">Party Room Code</label>
+        <input type="text" id="share-code-input" class="input-field" style="font-family: monospace; font-size: 1.1rem; text-align: center;" readonly>
+      </div>
+
+      <!-- Long-Distance Remote Watch Guidance Card -->
+      <div id="remote-tunnel-box" class="remote-tunnel-card" style="display: none; margin-top: 1.25rem;">
+        <div class="remote-tunnel-badge">🌐 Watching with a friend far away?</div>
+        <p class="remote-tunnel-desc">
+          To give your friend a direct link without any signups or accounts, run:
+        </p>
+        <div class="tunnel-command-wrap">
+          <code id="tunnel-command-text">npm run tunnel</code>
+          <button type="button" class="btn btn-secondary btn-sm" id="btn-copy-tunnel-cmd">Copy</button>
+        </div>
+        <p class="remote-tunnel-note">
+          Zero setup needed: no accounts, no GitHub, and no dashboard upload! It just works directly from your Mac.
+        </p>
+      </div>
+
+      <div id="remote-tunnel-active-box" class="remote-tunnel-card active" style="display: none; margin-top: 1.25rem;">
+        <div class="remote-tunnel-badge" style="color: #4ade80;">🌍 Worldwide Remote Watch Active</div>
+        <p class="remote-tunnel-desc" style="color: rgba(255,255,255,0.85);">
+          This link works worldwide! Share it with your friend—they can open it on their phone or laptop to watch videos in lockstep with you.
+        </p>
+      </div>
+
+      <div style="margin-top: 1.5rem; text-align: center;">
+        <button type="button" class="btn btn-secondary" data-close="modal-share" style="width: 100%;">
+          Close
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Room Settings -->
+  <div class="modal-backdrop" id="modal-settings">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 class="modal-title">Room & Audio Settings</h3>
+        <button type="button" class="modal-close-btn" data-close="modal-settings">✕</button>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 1.25rem;">
+        <div style="display: flex; align-items: center; justify-content: space-between;">
+          <div>
+            <div style="font-weight: 600; font-size: 0.95rem;">Host Control Lock</div>
+            <div style="font-size: 0.8rem; color: var(--text-secondary);">Only room host can play, pause, or seek</div>
+          </div>
+          <input type="checkbox" id="setting-host-lock" style="width: 20px; height: 20px; accent-color: var(--accent-purple); cursor: pointer;">
+        </div>
+
+        <div style="display: flex; align-items: center; justify-content: space-between;">
+          <div>
+            <div style="font-weight: 600; font-size: 0.95rem;">Interactive Sound Effects</div>
+            <div style="font-size: 0.8rem; color: var(--text-secondary);">Play subtle audio cues on joins and chat</div>
+          </div>
+          <input type="checkbox" id="setting-sound-effects" checked style="width: 20px; height: 20px; accent-color: var(--accent-purple); cursor: pointer;">
+        </div>
+
+        <div style="display: flex; align-items: center; justify-content: space-between;">
+          <div>
+            <div style="font-weight: 600; font-size: 0.95rem;">Ambient Canvas Glow</div>
+            <div style="font-size: 0.8rem; color: var(--text-secondary);">Dynamic color backdrop from video frames</div>
+          </div>
+          <input type="checkbox" id="setting-ambient-glow" checked style="width: 20px; height: 20px; accent-color: var(--accent-purple); cursor: pointer;">
+        </div>
+      </div>
+
+      <div style="margin-top: 2rem;">
+        <button type="button" class="btn btn-primary" data-close="modal-settings" style="width: 100%;">
+          Done
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: First-time Nickname Prompt (if joining directly via URL) -->
+  <div class="modal-backdrop" id="modal-profile-prompt">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 class="modal-title">Welcome to the Watch Party!</h3>
+      </div>
+      <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1.25rem;">
+        Choose your display name and avatar to enter the cinema room.
+      </p>
+
+      <form id="profile-prompt-form">
+        <div class="form-group">
+          <label class="form-label" for="prompt-username">Nickname</label>
+          <input type="text" id="prompt-username" class="input-field" placeholder="Enter your name" required maxlength="25">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Pick Avatar</label>
+          <div class="avatar-grid" id="prompt-avatar-grid">
+            <button type="button" class="avatar-choice selected" data-emoji="🍿">🍿</button>
+            <button type="button" class="avatar-choice" data-emoji="🎬">🎬</button>
+            <button type="button" class="avatar-choice" data-emoji="🦊">🦊</button>
+            <button type="button" class="avatar-choice" data-emoji="🚀">🚀</button>
+            <button type="button" class="avatar-choice" data-emoji="👾">👾</button>
+            <button type="button" class="avatar-choice" data-emoji="🐱">🐱</button>
+            <button type="button" class="avatar-choice" data-emoji="✨">✨</button>
+            <button type="button" class="avatar-choice" data-emoji="🔥">🔥</button>
+          </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 1rem;">
+          Enter Theater
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <div class="toast-container" id="toast-container"></div>
+
+  <script src="/js/splash.js"></script>
+  <script src="/js/room.js"></script>
+</body>
+</html>

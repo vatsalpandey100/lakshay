@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#06070b">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Lakshay — Watch Anime & Movies Together in Perfect Sync</title>
+  <meta name="description" content="Watch Anime, YouTube, and MP4 videos synchronized in real time with friends in Lakshay. Instant room creation, zero lag, live chat, and animated reactions.">
+  
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  
+  <link rel="stylesheet" href="/css/main.css">
+</head>
+<body>
+  <!-- Ambient background glow elements -->
+  <div class="bg-ambient-blob blob-1"></div>
+  <div class="bg-ambient-blob blob-2"></div>
+
+  <!-- Main Navigation -->
+  <header class="site-nav">
+    <a href="/" class="nav-brand">
+      <div class="brand-icon">⚡</div>
+      <span>Lakshay</span>
+      <span class="brand-badge">Anime & Sync</span>
+    </a>
+    <div class="nav-actions">
+      <a href="#active-parties" class="btn btn-ghost btn-sm">Public Lounges</a>
+      <a href="#quick-start" class="btn btn-primary btn-sm">Create Party</a>
+    </div>
+  </header>
+
+  <!-- Hero Section -->
+  <main>
+    <section class="hero-section">
+      <div class="dynamic-island-capsule" style="margin-bottom: 2rem;">
+        <span class="pulse-circle"></span>
+        <span style="font-weight: 600; color: #c084fc; letter-spacing: 0.05em;">Zero-Lag Cinema & Anime Engine</span>
+        <div class="sound-wave-bars">
+          <div class="sound-wave-bar"></div>
+          <div class="sound-wave-bar"></div>
+          <div class="sound-wave-bar"></div>
+          <div class="sound-wave-bar"></div>
+        </div>
+      </div>
+      <h1 class="hero-title">
+        Watch Anime & Videos <br>
+        Together in <span class="gradient-text">Lakshay</span>
+      </h1>
+      <p class="hero-subtitle">
+        Stream your favorite anime, YouTube videos, and movies in perfect millisecond sync with your friends. Zero buffering lag, instant reactions, live chat, and direct local file playback.
+      </p>
+
+      <!-- Action Cards: Create Room & Join Room -->
+      <div class="room-creation-container" id="quick-start">
+        <!-- Create Room Card -->
+        <div class="action-card">
+          <div class="card-icon-wrap">✨</div>
+          <h2 class="card-title">Start a Watch Party</h2>
+          <p class="card-desc">Create a private synchronized room in seconds. Invite your friends with a single link.</p>
+          
+          <form id="create-room-form">
+            <div class="form-group">
+              <label class="form-label" for="create-room-name">Party Name</label>
+              <input type="text" id="create-room-name" class="input-field" placeholder="e.g. Friday Movie Night, Chill Lo-Fi Lounge" maxlength="40">
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="create-user-name">Your Nickname</label>
+              <input type="text" id="create-user-name" class="input-field" placeholder="Enter your name" required maxlength="25">
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Pick Your Avatar</label>
+              <div class="avatar-grid" id="create-avatar-grid">
+                <button type="button" class="avatar-choice selected" data-emoji="🍿">🍿</button>
+                <button type="button" class="avatar-choice" data-emoji="🎬">🎬</button>
+                <button type="button" class="avatar-choice" data-emoji="🚀">🚀</button>
+                <button type="button" class="avatar-choice" data-emoji="🐱">🐱</button>
+                <button type="button" class="avatar-choice" data-emoji="🎧">🎧</button>
+                <button type="button" class="avatar-choice" data-emoji="🦊">🦊</button>
+                <button type="button" class="avatar-choice" data-emoji="⚡">⚡</button>
+                <button type="button" class="avatar-choice" data-emoji="🦄">🦄</button>
+              </div>
+            </div>
+
+            <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 1rem;">
+              <span>🎉 Create Watch Room</span>
+            </button>
+          </form>
+        </div>
+
+        <!-- Join Room Card -->
+        <div class="action-card join-card">
+          <div class="card-icon-wrap">🔗</div>
+          <h2 class="card-title">Join Existing Party</h2>
+          <p class="card-desc">Have a room code or link from a friend? Enter it below to hop straight into the theater.</p>
+
+          <form id="join-room-form">
+            <div class="form-group">
+              <label class="form-label" for="join-room-code">Room Code or Invite URL</label>
+              <input type="text" id="join-room-code" class="input-field" placeholder="e.g. cosmic-nebula-42 or paste URL" required>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="join-user-name">Your Nickname</label>
+              <input type="text" id="join-user-name" class="input-field" placeholder="Enter your name" required maxlength="25">
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Pick Your Avatar</label>
+              <div class="avatar-grid" id="join-avatar-grid">
+                <button type="button" class="avatar-choice selected" data-emoji="🍿">🍿</button>
+                <button type="button" class="avatar-choice" data-emoji="👾">👾</button>
+                <button type="button" class="avatar-choice" data-emoji="🔥">🔥</button>
+                <button type="button" class="avatar-choice" data-emoji="😎">😎</button>
+                <button type="button" class="avatar-choice" data-emoji="🐼">🐼</button>
+                <button type="button" class="avatar-choice" data-emoji="✨">✨</button>
+                <button type="button" class="avatar-choice" data-emoji="🎯">🎯</button>
+                <button type="button" class="avatar-choice" data-emoji="🦖">🦖</button>
+              </div>
+            </div>
+
+            <button type="submit" class="btn btn-secondary" style="width: 100%; margin-top: 1rem;">
+              <span>🚀 Join Watch Party</span>
+            </button>
+          </form>
+        </div>
+      </div>
+    </section>
+
+    <!-- Active Public Lounges Section -->
+    <section class="live-rooms-section" id="active-parties">
+      <div class="section-header">
+        <h2 class="section-title">Active Public Lounges</h2>
+        <p class="section-desc">Jump into live public watch parties or see what people are streaming right now.</p>
+      </div>
+
+      <div class="rooms-list" id="public-rooms-list">
+        <!-- Rendered dynamically via landing.js -->
+        <div class="room-preview-card" style="text-align: center; padding: 2rem;">
+          <p style="color: var(--text-secondary); margin-bottom: 1rem;">No public rooms currently active. Be the first to create one!</p>
+          <a href="#quick-start" class="btn btn-primary btn-sm">Launch a Room</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- Features Showcase -->
+    <section class="features-section">
+      <div class="section-header">
+        <h2 class="section-title">Built for the Ultimate Shared Experience</h2>
+        <p class="section-desc">Engineered for seamless synchronization, high visual fidelity, and social interaction.</p>
+      </div>
+
+      <div class="features-grid">
+        <div class="feature-item">
+          <div class="feature-icon">⚡</div>
+          <h3 class="feature-name">Sub-50ms Drift Correction</h3>
+          <p class="feature-detail">Intelligent client-server time alignment keeps everyone on the exact same frame without stuttering or jarring rewinds.</p>
+        </div>
+
+        <div class="feature-item">
+          <div class="feature-icon">📺</div>
+          <h3 class="feature-name">Multi-Source Player</h3>
+          <p class="feature-detail">Seamlessly load YouTube videos, direct MP4/WebM video links, or pick from our built-in high-definition movie library.</p>
+        </div>
+
+        <div class="feature-item">
+          <div class="feature-icon">🎆</div>
+          <h3 class="feature-name">Ambient Cinema Glow</h3>
+          <p class="feature-detail">Dynamic reactive lighting samples active video frames to project an immersive ambient glow across your viewing space.</p>
+        </div>
+
+        <div class="feature-item">
+          <div class="feature-icon">💬</div>
+          <h3 class="feature-name">Live Chat & Reactions</h3>
+          <p class="feature-detail">Share the hype! Tap animated emojis to send flying reactions right across the video player for everyone to see.</p>
+        </div>
+
+        <div class="feature-item">
+          <div class="feature-icon">📋</div>
+          <h3 class="feature-name">Collaborative Queue</h3>
+          <p class="feature-detail">Anyone can line up the next videos or trailers. Keep the playlist going automatically from start to finish.</p>
+        </div>
+
+        <div class="feature-item">
+          <div class="feature-icon">👑</div>
+          <h3 class="feature-name">Host Control Permissions</h3>
+          <p class="feature-detail">Choose between democratic mode (anyone can pause/seek) or Host Lock mode to prevent pranksters from skipping ahead.</p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer style="text-align: center; padding: 3rem 1rem; border-top: 1px solid var(--border-subtle); color: var(--text-muted); font-size: 0.85rem;">
+    <p>⚡ <strong>Lakshay</strong> — Watch Anime & Videos Together in Millisecond Sync.</p>
+  </footer>
+
+  <div class="toast-container" id="toast-container"></div>
+
+  <script src="/js/splash.js"></script>
+  <script src="/js/landing.js"></script>
+</body>
+</html>
