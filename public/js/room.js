@@ -1186,9 +1186,12 @@
     }
   }
 
-  // Local Anime Video File Integration (Zero-lag local playback with real-time sync)
+  // Local Anime Video File Integration (Play Now or Add to Queue)
   const localFileInput = document.getElementById('local-video-file-input');
+  const localQueueInput = document.getElementById('local-video-queue-input');
   const btnSelectLocal = document.getElementById('btn-select-local-video');
+  const btnQueueLocal = document.getElementById('btn-queue-local-video');
+  const btnTabQueueAnime = document.getElementById('btn-tab-queue-anime');
   const localFileNotice = document.getElementById('local-file-notice');
   const localFileNameText = document.getElementById('local-file-name-text');
   const btnMatchLocal = document.getElementById('btn-match-local-file');
@@ -1196,6 +1199,18 @@
   if (btnSelectLocal && localFileInput) {
     btnSelectLocal.addEventListener('click', () => {
       localFileInput.click();
+    });
+  }
+
+  if (btnQueueLocal && localQueueInput) {
+    btnQueueLocal.addEventListener('click', () => {
+      localQueueInput.click();
+    });
+  }
+
+  if (btnTabQueueAnime && localQueueInput) {
+    btnTabQueueAnime.addEventListener('click', () => {
+      localQueueInput.click();
     });
   }
 
@@ -1209,11 +1224,21 @@
     localFileInput.addEventListener('change', (e) => {
       const file = e.target.files[0];
       if (!file) return;
-      handleLocalVideoFile(file);
+      handleLocalVideoFile(file, false);
+      localFileInput.value = '';
     });
   }
 
-  // Drag and drop video directly onto the player
+  if (localQueueInput) {
+    localQueueInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      handleLocalVideoFile(file, true);
+      localQueueInput.value = '';
+    });
+  }
+
+  // Drag and drop video directly onto the player (Plays Now)
   if (playerWrapper) {
     playerWrapper.addEventListener('dragover', (e) => {
       e.preventDefault();
@@ -1230,7 +1255,34 @@
       if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
         const file = e.dataTransfer.files[0];
         if (file.type.startsWith('video/') || file.name.match(/\.(mp4|mkv|webm|mov|avi)$/i)) {
-          handleLocalVideoFile(file);
+          handleLocalVideoFile(file, false);
+        } else {
+          showToast('⚠️ Please drop a valid video file (MP4, WebM, MKV).');
+        }
+      }
+    });
+  }
+
+  // Drag and drop video directly onto the Queue Tab (Adds to Queue)
+  const tabQueue = document.getElementById('tab-queue');
+  if (tabQueue) {
+    tabQueue.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      tabQueue.style.outline = '2px dashed var(--primary)';
+      tabQueue.style.outlineOffset = '-4px';
+    });
+
+    tabQueue.addEventListener('dragleave', () => {
+      tabQueue.style.outline = '';
+    });
+
+    tabQueue.addEventListener('drop', (e) => {
+      e.preventDefault();
+      tabQueue.style.outline = '';
+      if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+        const file = e.dataTransfer.files[0];
+        if (file.type.startsWith('video/') || file.name.match(/\.(mp4|mkv|webm|mov|avi)$/i)) {
+          handleLocalVideoFile(file, true);
         } else {
           showToast('⚠️ Please drop a valid video file (MP4, WebM, MKV).');
         }
@@ -1246,34 +1298,39 @@
   const playerStreamBeacon = document.getElementById('player-stream-beacon');
   const playerStreamBeaconText = document.getElementById('player-stream-beacon-text');
 
-  async function handleLocalVideoFile(file) {
-    // 1. Immediate zero-wait local playback for the host
-    const objectUrl = URL.createObjectURL(file);
-    const initialVideoData = {
-      title: `🎬 ${file.name}`,
-      type: 'html5',
-      url: objectUrl,
-      duration: 0
-    };
-    loadVideoSource(initialVideoData, 0, true);
+  async function handleLocalVideoFile(file, isQueue = false) {
+    const cleanTitle = file.name.replace(/\.[^/.]+$/, '').replace(/[_.-]+/g, ' ');
+
+    if (!isQueue) {
+      // 1. Immediate zero-wait local playback for the host
+      const objectUrl = URL.createObjectURL(file);
+      const initialVideoData = {
+        title: `🎬 ${cleanTitle}`,
+        type: 'html5',
+        url: objectUrl,
+        duration: 0
+      };
+      loadVideoSource(initialVideoData, 0, true);
+    }
 
     // 2. Display visionOS transmission status
     if (streamTransferBanner) {
-      if (streamTransferTitle) streamTransferTitle.textContent = `Streaming "${file.name}" to friend...`;
+      if (streamTransferTitle) streamTransferTitle.textContent = isQueue ? `Uploading "${file.name}" to Upcoming Queue...` : `Streaming "${file.name}" to friend...`;
       if (streamTransferPercent) streamTransferPercent.textContent = '0%';
       if (streamTransferBar) streamTransferBar.style.width = '0%';
       streamTransferBanner.style.display = 'block';
     }
     if (playerStreamBeacon) {
-      if (playerStreamBeaconText) playerStreamBeaconText.textContent = `Streaming Anime to Remote Friend • 0%`;
+      if (playerStreamBeaconText) playerStreamBeaconText.textContent = isQueue ? `Queueing Anime • 0%` : `Streaming Anime to Remote Friend • 0%`;
       playerStreamBeacon.style.display = 'flex';
     }
 
-    showToast(`🚀 Streaming "${file.name}" to your friend...`);
+    showToast(isQueue ? `📋 Uploading "${cleanTitle}" to queue...` : `🚀 Streaming "${cleanTitle}" to your friend...`);
 
     // 3. Chunked upload: 5MB chunks (bypasses Cloudflare 100MB body limit completely!)
     const CHUNK_SIZE = 5 * 1024 * 1024; // 5 MB
     const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+    const uniqueUploadName = `${Date.now()}-${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
     let finalResult = null;
 
     try {
@@ -1287,7 +1344,7 @@
           method: 'POST',
           headers: {
             'Content-Type': 'application/octet-stream',
-            'x-file-name': encodeURIComponent(file.name),
+            'x-file-name': encodeURIComponent(uniqueUploadName),
             'x-chunk-index': String(chunkIdx),
             'x-total-chunks': String(totalChunks)
           },
@@ -1303,10 +1360,10 @@
 
         if (streamTransferPercent) streamTransferPercent.textContent = `${percent}%`;
         if (streamTransferBar) streamTransferBar.style.width = `${percent}%`;
-        if (playerStreamBeaconText) playerStreamBeaconText.textContent = `Streaming Anime to Remote Friend • ${percent}%`;
+        if (playerStreamBeaconText) playerStreamBeaconText.textContent = isQueue ? `Queueing Anime • ${percent}%` : `Streaming Anime to Remote Friend • ${percent}%`;
 
         // Relay progress to friend's device
-        if (socket) {
+        if (socket && !isQueue) {
           socket.emit('upload-progress', { filename: file.name, progress: percent });
         }
 
@@ -1318,25 +1375,37 @@
       if (finalResult && finalResult.url) {
         if (streamTransferPercent) streamTransferPercent.textContent = '100%';
         if (streamTransferBar) streamTransferBar.style.width = '100%';
-        if (playerStreamBeaconText) playerStreamBeaconText.textContent = `✅ Transmitted to Friend!`;
+        if (playerStreamBeaconText) playerStreamBeaconText.textContent = isQueue ? `✅ Added to Queue!` : `✅ Transmitted to Friend!`;
 
         setTimeout(() => {
           if (streamTransferBanner) streamTransferBanner.style.display = 'none';
           if (playerStreamBeacon) playerStreamBeacon.style.display = 'none';
         }, 1800);
 
-        // Broadcast change-video with the server's stream URL and current playback position
-        if (socket) {
-          const currentPlaybackTime = getCurrentPlaybackTime() || 0;
-          socket.emit('change-video', {
-            title: finalResult.title || file.name,
-            type: 'html5',
-            url: finalResult.url,
-            currentTime: currentPlaybackTime
-          });
+        if (isQueue) {
+          if (socket) {
+            socket.emit('queue-add', {
+              title: `🎬 ${cleanTitle}`,
+              type: 'html5',
+              url: finalResult.url,
+              duration: 0,
+              thumbnail: 'https://images.unsplash.com/photo-1578632767115-351597cf2477?w=600&auto=format&fit=crop&q=80'
+            });
+          }
+          showToast(`📋 Anime file "${cleanTitle}" added to upcoming queue!`);
+        } else {
+          // Broadcast change-video with the server's stream URL and current playback position
+          if (socket) {
+            const currentPlaybackTime = getCurrentPlaybackTime() || 0;
+            socket.emit('change-video', {
+              title: `🎬 ${cleanTitle}`,
+              type: 'html5',
+              url: finalResult.url,
+              currentTime: currentPlaybackTime
+            });
+          }
+          showToast(`✨ Stream live! Your friend's device is now playing in sync.`);
         }
-
-        showToast(`✨ Stream live! Your friend's device is now playing in sync.`);
       }
     } catch (err) {
       console.error('Video upload error:', err);
@@ -1529,11 +1598,18 @@
 
     if (queue.length === 0) {
       queueItemsList.innerHTML = `
-        <div style="text-align: center; padding: 2rem 1rem; color: var(--text-muted); font-size: 0.88rem;">
-          <div style="font-size: 1.75rem; margin-bottom: 0.5rem;">📋</div>
-          The queue is empty. Paste a URL below the player and click "+ Queue" to line up movies!
+        <div style="text-align: center; padding: 2.2rem 1rem; color: var(--text-muted); font-size: 0.88rem;">
+          <div style="font-size: 2rem; margin-bottom: 0.5rem;">📋</div>
+          <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 0.3rem;">The queue is empty</div>
+          <div style="font-size: 0.8rem; margin-bottom: 1rem; color: var(--text-muted);">Paste a video URL or upload an anime file to line up upcoming episodes!</div>
+          <button type="button" class="btn btn-secondary btn-sm" id="btn-empty-queue-upload" style="margin: 0 auto;">
+            <span>📂 Upload Anime to Queue</span>
+          </button>
         </div>
       `;
+      document.getElementById('btn-empty-queue-upload')?.addEventListener('click', () => {
+        document.getElementById('local-video-queue-input')?.click();
+      });
       return;
     }
 

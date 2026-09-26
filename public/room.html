@@ -256,12 +256,16 @@
           <!-- Desktop Media Source Container -->
           <div id="desktop-media-container">
             <div class="media-source-section" id="media-source-section">
-              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;">
+              <div class="media-header-row" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem; flex-wrap: wrap; gap: 0.5rem;">
                 <h3 style="font-size: 0.95rem; font-weight: 700;">Load Video, Anime or Stream</h3>
-                <div>
+                <div class="local-file-btns" style="display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap;">
                   <input type="file" id="local-video-file-input" accept="video/mp4,video/webm,video/mkv,video/quicktime,video/*" style="display: none;">
-                  <button type="button" class="btn btn-secondary btn-sm" id="btn-select-local-video" title="Load an anime video file from your computer">
-                    <span>📂 Open Anime File</span>
+                  <input type="file" id="local-video-queue-input" accept="video/mp4,video/webm,video/mkv,video/quicktime,video/*" style="display: none;">
+                  <button type="button" class="btn btn-secondary btn-sm" id="btn-select-local-video" title="Select anime video to play immediately">
+                    <span>📂 Play Anime File</span>
+                  </button>
+                  <button type="button" class="btn btn-secondary btn-sm" id="btn-queue-local-video" title="Upload anime video file to the upcoming queue">
+                    <span>📋 + Queue Anime File</span>
                   </button>
                 </div>
               </div>
@@ -339,6 +343,12 @@
 
         <!-- Queue Pane -->
         <div class="tab-pane" id="tab-queue">
+          <div class="queue-header-actions" style="padding: 0.65rem 0.85rem; border-bottom: 1px solid var(--border-subtle); display: flex; justify-content: space-between; align-items: center; background: rgba(255, 255, 255, 0.02);">
+            <span style="font-size: 0.82rem; font-weight: 600; color: var(--text-secondary);">Upcoming Anime & Movies</span>
+            <button type="button" class="btn btn-secondary btn-sm" id="btn-tab-queue-anime" title="Upload anime video file directly to queue">
+              <span>📂 + Queue File</span>
+            </button>
+          </div>
           <div class="queue-container" id="queue-items-list">
             <!-- Rendered dynamically -->
           </div>
