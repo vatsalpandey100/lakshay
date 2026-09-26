@@ -41,7 +41,6 @@
   const muteIcon = document.getElementById('mute-icon');
   const rateSelect = document.getElementById('ctrl-playback-rate');
   const fullscreenBtn = document.getElementById('ctrl-fullscreen-btn');
-  const pipBtn = document.getElementById('ctrl-pip-btn');
   const syncBeaconBtn = document.getElementById('sync-beacon-btn');
   const syncStatusText = document.getElementById('sync-status-text');
   const activeVideoTitle = document.getElementById('active-video-title');
@@ -1199,20 +1198,6 @@
         playerWrapper.requestFullscreen().catch(() => {});
       } else {
         document.exitFullscreen().catch(() => {});
-      }
-    });
-  }
-
-  if (pipBtn) {
-    pipBtn.addEventListener('click', async () => {
-      try {
-        if (document.pictureInPictureElement) {
-          await document.exitPictureInPicture();
-        } else if (html5Player.readyState >= 2) {
-          await html5Player.requestPictureInPicture();
-        }
-      } catch (err) {
-        showToast('Picture-in-Picture not supported for this stream.');
       }
     });
   }

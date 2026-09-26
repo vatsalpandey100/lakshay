@@ -2737,10 +2737,6 @@ video::cue {
     font-size: 0.7rem !important;
   }
 
-  #ctrl-pip-btn {
-    display: none;
-  }
-
   /* Compact Video Title & Scrolling Reactions Bar */
   .stage-details {
     padding: 0.5rem 0.75rem;
