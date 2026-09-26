@@ -422,27 +422,30 @@ body {
 }
 
 .avatar-choice {
-  width: 42px;
-  height: 42px;
-  min-width: 42px;
-  border-radius: var(--radius-md);
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  border-radius: 50%;
   background: rgba(255, 255, 255, 0.05);
-  border: 1px solid var(--border-subtle);
+  border: 2px solid rgba(255, 255, 255, 0.12);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.25rem;
+  font-size: 1.35rem;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
   overflow: hidden;
   padding: 0;
+  flex-shrink: 0;
+  aspect-ratio: 1 / 1;
 }
 
 .avatar-choice-img {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  border-radius: inherit;
+  border-radius: 50%;
   display: block;
   pointer-events: none;
 }
@@ -451,20 +454,21 @@ body {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  border-radius: inherit;
+  border-radius: 50%;
   display: block;
 }
 
 .avatar-choice:hover {
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.12);
   transform: scale(1.08);
+  border-color: rgba(255, 255, 255, 0.3);
 }
 
 .avatar-choice.selected {
   background: rgba(139, 92, 246, 0.25);
-  border-color: var(--accent-purple);
-  box-shadow: 0 0 10px rgba(139, 92, 246, 0.35);
-  transform: scale(1.1);
+  border-color: #a855f7;
+  box-shadow: 0 0 0 2px rgba(168, 85, 247, 0.5), 0 0 16px rgba(168, 85, 247, 0.45);
+  transform: scale(1.08);
 }
 
 /* Feature Showcase Grid */
@@ -716,7 +720,7 @@ body {
 .video-player-wrapper {
   position: relative;
   width: 100%;
-  max-width: min(1080px, calc((100vh - var(--header-height) - 150px) * (16 / 9)));
+  max-width: min(1080px, calc((100vh - var(--header-height) - 140px) * 1.777778));
   aspect-ratio: 16 / 9;
   background: #000;
   display: flex;
@@ -2563,6 +2567,19 @@ body {
   transform: scale(1.03);
   border-color: rgba(255, 255, 255, 0.3);
   box-shadow: 0 12px 30px rgba(0, 0, 0, 0.6), 0 0 20px rgba(139, 92, 246, 0.25);
+}
+
+/* Instant Local File Match Notification */
+.local-file-match-card {
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  border-radius: var(--radius-md);
+  padding: 0.85rem 1.1rem;
+  margin-bottom: 0.85rem;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow: 0 4px 20px rgba(16, 185, 129, 0.15);
+  animation: fadeIn 0.3s ease-out;
 }
 
 /* Stream Transfer Card for Remote Video Sync */

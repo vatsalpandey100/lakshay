@@ -189,39 +189,57 @@ app.get('/videos/:filename', (req, res) => {
   }
 });
 
-// Chunked Video Upload Endpoint: Bypasses Cloudflare 100MB single-request limit
-app.post('/api/upload-chunk', express.raw({ type: 'application/octet-stream', limit: '30mb' }), (req, res) => {
-  const rawFilename = req.headers['x-file-name'] ? decodeURIComponent(req.headers['x-file-name']) : `anime-${Date.now()}.mp4`;
-  const sanitized = rawFilename.replace(/[^a-zA-Z0-9._-]/g, '_');
-  const chunkIndex = parseInt(req.headers['x-chunk-index'], 10) || 0;
-  const totalChunks = parseInt(req.headers['x-total-chunks'], 10) || 1;
+// High-Speed Parallel Chunked Video Upload Endpoint
+app.post('/api/upload-chunk', express.raw({ type: 'application/octet-stream', limit: '35mb' }), async (req, res) => {
+  try {
+    const rawFilename = req.headers['x-file-name'] ? decodeURIComponent(req.headers['x-file-name']) : `anime-${Date.now()}.mp4`;
+    const sanitized = rawFilename.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const chunkIndex = parseInt(req.headers['x-chunk-index'], 10) || 0;
+    const totalChunks = parseInt(req.headers['x-total-chunks'], 10) || 1;
 
-  const videoDir = path.join(__dirname, 'public', 'videos');
-  if (!fs.existsSync(videoDir)) {
-    fs.mkdirSync(videoDir, { recursive: true });
-  }
-
-  const destPath = path.join(videoDir, sanitized);
-
-  // If first chunk, clean existing file
-  if (chunkIndex === 0 && fs.existsSync(destPath)) {
-    try { fs.unlinkSync(destPath); } catch (e) {}
-  }
-
-  // Append binary buffer to the file
-  fs.appendFile(destPath, req.body, (err) => {
-    if (err) {
-      console.error('Error writing video chunk:', err);
-      return res.status(500).json({ error: 'Failed to write chunk' });
+    const videoDir = path.join(__dirname, 'public', 'videos');
+    if (!fs.existsSync(videoDir)) {
+      fs.mkdirSync(videoDir, { recursive: true });
     }
 
-    const isComplete = chunkIndex >= totalChunks - 1;
-    if (isComplete) {
+    // Temporary chunk staging directory for parallel uploads
+    const chunkDir = path.join(videoDir, `.chunks-${sanitized}`);
+    if (!fs.existsSync(chunkDir)) {
+      fs.mkdirSync(chunkDir, { recursive: true });
+    }
+
+    const chunkPath = path.join(chunkDir, `part_${String(chunkIndex).padStart(5, '0')}`);
+    await fs.promises.writeFile(chunkPath, req.body);
+
+    // Check how many chunks have arrived
+    const uploadedFiles = await fs.promises.readdir(chunkDir);
+    const completedParts = uploadedFiles.filter(f => f.startsWith('part_'));
+
+    if (completedParts.length >= totalChunks) {
+      // Assemble all chunks strictly in numerical order
+      const destPath = path.join(videoDir, sanitized);
+      const writeStream = fs.createWriteStream(destPath);
+
+      for (let i = 0; i < totalChunks; i++) {
+        const pFile = path.join(chunkDir, `part_${String(i).padStart(5, '0')}`);
+        if (fs.existsSync(pFile)) {
+          const chunkData = await fs.promises.readFile(pFile);
+          writeStream.write(chunkData);
+          try { await fs.promises.unlink(pFile); } catch (e) {}
+        }
+      }
+      writeStream.end();
+
+      // Clean up chunk folder
+      try {
+        await fs.promises.rm(chunkDir, { recursive: true, force: true });
+      } catch (e) {}
+
       return res.json({
         success: true,
         complete: true,
         url: `/videos/${sanitized}`,
-        title: sanitized.replace(/\.[^/.]+$/, '').replace(/[_.-]+/g, ' ')
+        title: sanitized.replace(/^[0-9]+-/, '').replace(/\.[^/.]+$/, '').replace(/[_.-]+/g, ' ')
       });
     }
 
@@ -229,9 +247,13 @@ app.post('/api/upload-chunk', express.raw({ type: 'application/octet-stream', li
       success: true,
       complete: false,
       chunkIndex,
-      totalChunks
+      totalChunks,
+      receivedCount: completedParts.length
     });
-  });
+  } catch (err) {
+    console.error('Error in parallel chunk upload:', err);
+    res.status(500).json({ error: 'Failed to process video chunk' });
+  }
 });
 
 // Stream Upload Endpoint: Host uploads anime video directly to stream to all friends
@@ -450,6 +472,17 @@ io.on('connection', (socket) => {
       currentVideo: room.currentVideo,
       playback: room.playback,
       message: changeMsg
+    });
+  });
+
+  // Instant Local File Match Prompt (allows friends to sync 0s instantly if they have the file)
+  socket.on('local-file-started', (data) => {
+    if (!currentRoomId || !rooms.has(currentRoomId)) return;
+    socket.to(currentRoomId).emit('local-file-prompt', {
+      hostName: currentUser ? currentUser.username : 'Host',
+      filename: data.filename,
+      size: data.size,
+      title: data.title
     });
   });
 

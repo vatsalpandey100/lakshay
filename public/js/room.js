@@ -340,6 +340,16 @@
     socket.on('error-msg', ({ message }) => {
       showToast(`⚠️ ${message}`);
     });
+
+    socket.on('local-file-prompt', (data) => {
+      const matchBanner = document.getElementById('local-file-match-banner');
+      const filenameDisplay = document.getElementById('match-filename-display');
+      if (matchBanner && filenameDisplay) {
+        filenameDisplay.textContent = data.filename || data.title;
+        matchBanner.style.display = 'block';
+        showToast(`⚡ Host started playing "${data.filename}". Select this file on your device to sync instantly!`);
+      }
+    });
   }
 
   // Video Source Loader (Dual Engine: HTML5 & YouTube)
@@ -1290,11 +1300,49 @@
     });
   }
 
+  // Instant Match for Viewers (0s wait if friend has file)
+  const matchInput = document.getElementById('viewer-local-match-input');
+  const btnMatchSelect = document.getElementById('btn-match-select-file');
+  const btnMatchDismiss = document.getElementById('btn-match-dismiss');
+  const matchBanner = document.getElementById('local-file-match-banner');
+
+  if (btnMatchSelect && matchInput) {
+    btnMatchSelect.addEventListener('click', () => {
+      matchInput.click();
+    });
+  }
+
+  if (btnMatchDismiss && matchBanner) {
+    btnMatchDismiss.addEventListener('click', () => {
+      matchBanner.style.display = 'none';
+    });
+  }
+
+  if (matchInput) {
+    matchInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const objectUrl = URL.createObjectURL(file);
+      const cleanTitle = file.name.replace(/\.[^/.]+$/, '').replace(/[_.-]+/g, ' ');
+      loadVideoSource({
+        title: `⚡ ${cleanTitle} (Instant 0s Sync)`,
+        type: 'html5',
+        url: objectUrl,
+        duration: 0
+      }, 0, true);
+      if (matchBanner) matchBanner.style.display = 'none';
+      showToast(`⚡ Instant sync active! Watching "${cleanTitle}" in full 4K with 0s wait.`);
+      if (socket) socket.emit('query-sync');
+      matchInput.value = '';
+    });
+  }
+
   // Stream Transfer Elements
   const streamTransferBanner = document.getElementById('stream-transfer-banner');
   const streamTransferTitle = document.getElementById('stream-transfer-title');
   const streamTransferPercent = document.getElementById('stream-transfer-percent');
   const streamTransferBar = document.getElementById('stream-transfer-bar');
+  const streamTransferSub = document.getElementById('stream-transfer-sub');
   const playerStreamBeacon = document.getElementById('player-stream-beacon');
   const playerStreamBeaconText = document.getElementById('player-stream-beacon-text');
 
@@ -1311,66 +1359,117 @@
         duration: 0
       };
       loadVideoSource(initialVideoData, 0, true);
+
+      // 2. Alert room members so anyone with the same file can match instantly with 0s waiting
+      if (socket) {
+        socket.emit('local-file-started', {
+          filename: file.name,
+          size: file.size,
+          title: cleanTitle
+        });
+      }
     }
 
-    // 2. Display visionOS transmission status
+    // 2. Display transmission status with speed meter
     if (streamTransferBanner) {
       if (streamTransferTitle) streamTransferTitle.textContent = isQueue ? `Uploading "${file.name}" to Upcoming Queue...` : `Streaming "${file.name}" to friend...`;
       if (streamTransferPercent) streamTransferPercent.textContent = '0%';
       if (streamTransferBar) streamTransferBar.style.width = '0%';
+      if (streamTransferSub) streamTransferSub.textContent = 'High-speed parallel stream: initializing chunks...';
       streamTransferBanner.style.display = 'block';
     }
     if (playerStreamBeacon) {
-      if (playerStreamBeaconText) playerStreamBeaconText.textContent = isQueue ? `Queueing Anime • 0%` : `Streaming Anime to Remote Friend • 0%`;
+      if (playerStreamBeaconText) playerStreamBeaconText.textContent = isQueue ? `Queueing Anime • 0%` : `Streaming Anime to Friend • 0%`;
       playerStreamBeacon.style.display = 'flex';
     }
 
     showToast(isQueue ? `📋 Uploading "${cleanTitle}" to queue...` : `🚀 Streaming "${cleanTitle}" to your friend...`);
 
-    // 3. Chunked upload: 5MB chunks (bypasses Cloudflare 100MB body limit completely!)
-    const CHUNK_SIZE = 5 * 1024 * 1024; // 5 MB
+    // 3. High-Speed Parallel Chunked Upload (12MB chunks, 3 concurrent workers)
+    const CHUNK_SIZE = 12 * 1024 * 1024; // 12 MB
+    const CONCURRENCY = 3;
     const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
     const uniqueUploadName = `${Date.now()}-${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+    let completedChunks = 0;
+    let bytesUploaded = 0;
+    const uploadStartTime = Date.now();
     let finalResult = null;
+    let nextChunkIdx = 0;
+    let hasError = false;
 
-    try {
-      for (let chunkIdx = 0; chunkIdx < totalChunks; chunkIdx++) {
+    async function uploadWorker() {
+      while (nextChunkIdx < totalChunks && !hasError) {
+        const chunkIdx = nextChunkIdx++;
         const start = chunkIdx * CHUNK_SIZE;
         const end = Math.min(file.size, start + CHUNK_SIZE);
         const chunkBlob = file.slice(start, end);
+        const chunkSize = end - start;
 
-        // Upload chunk
-        const response = await fetch('/api/upload-chunk', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/octet-stream',
-            'x-file-name': encodeURIComponent(uniqueUploadName),
-            'x-chunk-index': String(chunkIdx),
-            'x-total-chunks': String(totalChunks)
-          },
-          body: chunkBlob
-        });
+        let retries = 3;
+        let success = false;
+        while (retries > 0 && !success && !hasError) {
+          try {
+            const response = await fetch('/api/upload-chunk', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/octet-stream',
+                'x-file-name': encodeURIComponent(uniqueUploadName),
+                'x-chunk-index': String(chunkIdx),
+                'x-total-chunks': String(totalChunks)
+              },
+              body: chunkBlob
+            });
 
-        if (!response.ok) {
-          throw new Error(`Chunk ${chunkIdx + 1}/${totalChunks} failed with status ${response.status}`);
-        }
+            if (!response.ok) throw new Error(`Chunk ${chunkIdx + 1} failed: status ${response.status}`);
+            const data = await response.json();
+            success = true;
+            completedChunks++;
+            bytesUploaded += chunkSize;
 
-        const data = await response.json();
-        const percent = Math.min(100, Math.round(((chunkIdx + 1) / totalChunks) * 100));
+            const elapsedSec = (Date.now() - uploadStartTime) / 1000;
+            const speedMBps = elapsedSec > 0.4 ? ((bytesUploaded / 1024 / 1024) / elapsedSec).toFixed(1) : '—';
+            const remainingMB = (file.size - bytesUploaded) / 1024 / 1024;
+            const etaSec = (parseFloat(speedMBps) > 0) ? Math.max(1, Math.ceil(remainingMB / parseFloat(speedMBps))) : '...';
+            const percent = Math.min(100, Math.round((completedChunks / totalChunks) * 100));
 
-        if (streamTransferPercent) streamTransferPercent.textContent = `${percent}%`;
-        if (streamTransferBar) streamTransferBar.style.width = `${percent}%`;
-        if (playerStreamBeaconText) playerStreamBeaconText.textContent = isQueue ? `Queueing Anime • ${percent}%` : `Streaming Anime to Remote Friend • ${percent}%`;
+            const progressInfo = `${percent}% • ${speedMBps} MB/s • ETA: ${etaSec}s`;
 
-        // Relay progress to friend's device
-        if (socket && !isQueue) {
-          socket.emit('upload-progress', { filename: file.name, progress: percent });
-        }
+            if (streamTransferPercent) streamTransferPercent.textContent = `${percent}%`;
+            if (streamTransferBar) streamTransferBar.style.width = `${percent}%`;
+            if (playerStreamBeaconText) {
+              playerStreamBeaconText.textContent = isQueue ? `Queueing: ${progressInfo}` : `Streaming: ${progressInfo}`;
+            }
+            if (streamTransferSub) {
+              streamTransferSub.textContent = `High-speed parallel stream: ${progressInfo}`;
+            }
 
-        if (data.complete) {
-          finalResult = data;
+            // Relay progress to friend's device
+            if (socket && !isQueue) {
+              socket.emit('upload-progress', { filename: file.name, progress: percent });
+            }
+
+            if (data.complete) {
+              finalResult = data;
+            }
+          } catch (err) {
+            retries--;
+            if (retries === 0) {
+              hasError = true;
+              throw err;
+            }
+            await new Promise(r => setTimeout(r, 600));
+          }
         }
       }
+    }
+
+    try {
+      const workers = [];
+      const workerCount = Math.min(CONCURRENCY, totalChunks);
+      for (let w = 0; w < workerCount; w++) {
+        workers.push(uploadWorker());
+      }
+      await Promise.all(workers);
 
       if (finalResult && finalResult.url) {
         if (streamTransferPercent) streamTransferPercent.textContent = '100%';

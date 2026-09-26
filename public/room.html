@@ -270,6 +270,30 @@
                 </div>
               </div>
 
+              <!-- Instant Local File Match Banner (0-Second Sync if friend has the file) -->
+              <div id="local-file-match-banner" class="local-file-match-card" style="display: none;">
+                <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap;">
+                  <div style="display: flex; align-items: center; gap: 0.6rem;">
+                    <span style="font-size: 1.4rem;">⚡</span>
+                    <div>
+                      <div style="font-size: 0.85rem; font-weight: 700; color: #fff;">
+                        Host started playing: <span id="match-filename-display" style="color: #6ee7b7;">anime.mp4</span>
+                      </div>
+                      <div style="font-size: 0.75rem; color: #a7f3d0;">
+                        Have this file on your phone or PC? Select it to sync instantly in 4K with <strong>0s waiting</strong>!
+                      </div>
+                    </div>
+                  </div>
+                  <div style="display: flex; gap: 0.4rem; align-items: center;">
+                    <input type="file" id="viewer-local-match-input" accept="video/mp4,video/webm,video/mkv,video/quicktime,video/*" style="display: none;">
+                    <button type="button" class="btn btn-primary btn-sm" id="btn-match-select-file" style="background: #059669; border-color: #10b981;">
+                      <span>⚡ Select to Sync (0s)</span>
+                    </button>
+                    <button type="button" class="btn btn-ghost btn-sm" id="btn-match-dismiss" title="Dismiss">✕</button>
+                  </div>
+                </div>
+              </div>
+
               <!-- Stream Transfer Progress for Remote Video Sync -->
               <div id="stream-transfer-banner" class="stream-transfer-card" style="display: none;">
                 <div class="stream-transfer-header">
@@ -283,7 +307,7 @@
                   <div id="stream-transfer-bar" class="stream-progress-fill" style="width: 0%;"></div>
                 </div>
                 <div id="stream-transfer-sub" style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.35rem;">
-                  Your friend's screen will automatically stream and sync to your exact second.
+                  Accelerated parallel stream: uploading chunks in high-speed background...
                 </div>
               </div>
 
