@@ -35,7 +35,7 @@
           <span>Lakshay</span>
         </a>
 
-        <div style="width: 1px; height: 24px; background: var(--border-subtle); margin: 0 0.25rem;"></div>
+        <div class="header-divider" style="width: 1px; height: 24px; background: var(--border-subtle); margin: 0 0.25rem;"></div>
 
         <div class="room-title-display">
           <span id="room-name-header">Cosmic Watch Party</span>
@@ -60,11 +60,13 @@
       </div>
 
       <div class="nav-actions">
-        <button type="button" class="btn btn-secondary btn-sm" id="btn-open-share">
-          <span>🔗 Share Party</span>
+        <button type="button" class="btn btn-secondary btn-sm nav-btn-share" id="btn-open-share" title="Share Party Link">
+          <span class="nav-btn-icon">🔗</span>
+          <span class="nav-btn-label">Share Party</span>
         </button>
-        <button type="button" class="btn btn-secondary btn-sm" id="btn-room-settings" title="Room Settings">
-          <span>⚙️ Settings</span>
+        <button type="button" class="btn btn-secondary btn-sm nav-btn-settings" id="btn-room-settings" title="Room Settings">
+          <span class="nav-btn-icon">⚙️</span>
+          <span class="nav-btn-label">Settings</span>
         </button>
       </div>
     </header>
@@ -209,52 +211,56 @@
             </div>
           </div>
 
-          <!-- Video Loader & Queue Adder Section -->
-          <div class="media-source-section">
-            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;">
-              <h3 style="font-size: 0.95rem; font-weight: 700;">Load Video, Anime or Stream</h3>
-              <div>
-                <input type="file" id="local-video-file-input" accept="video/mp4,video/webm,video/mkv,video/quicktime,video/*" style="display: none;">
-                <button type="button" class="btn btn-secondary btn-sm" id="btn-select-local-video" title="Load an anime video file from your computer">
-                  <span>📂 Open Anime File</span>
-                </button>
-              </div>
-            </div>
-
-            <!-- Stream Transfer Progress for Remote Video Sync -->
-            <div id="stream-transfer-banner" class="stream-transfer-card" style="display: none;">
-              <div class="stream-transfer-header">
-                <div style="display: flex; align-items: center; gap: 0.5rem;">
-                  <span class="stream-transfer-icon">📡</span>
-                  <span id="stream-transfer-title" style="font-weight: 700; color: #c084fc;">Transmitting Video to Remote Device...</span>
+          <!-- Desktop Media Source Container -->
+          <div id="desktop-media-container">
+            <div class="media-source-section" id="media-source-section">
+              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;">
+                <h3 style="font-size: 0.95rem; font-weight: 700;">Load Video, Anime or Stream</h3>
+                <div>
+                  <input type="file" id="local-video-file-input" accept="video/mp4,video/webm,video/mkv,video/quicktime,video/*" style="display: none;">
+                  <button type="button" class="btn btn-secondary btn-sm" id="btn-select-local-video" title="Load an anime video file from your computer">
+                    <span>📂 Open Anime File</span>
+                  </button>
                 </div>
-                <span id="stream-transfer-percent" class="stream-transfer-badge">0%</span>
               </div>
-              <div class="stream-progress-track">
-                <div id="stream-transfer-bar" class="stream-progress-fill" style="width: 0%;"></div>
-              </div>
-              <div id="stream-transfer-sub" style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.35rem;">
-                Your friend's screen will automatically stream and sync to your exact second.
-              </div>
-            </div>
 
-            <form id="media-source-form" class="source-input-group">
-              <input type="text" id="video-url-input" class="input-field" placeholder="Paste YouTube link (e.g. youtube.com/watch?v=...) or direct MP4/WebM video URL" required>
-              <button type="submit" class="btn btn-primary" id="btn-play-now">
-                <span>▶ Play Now</span>
-              </button>
-              <button type="button" class="btn btn-secondary" id="btn-add-to-queue">
-                <span>+ Queue</span>
-              </button>
-            </form>
+              <!-- Stream Transfer Progress for Remote Video Sync -->
+              <div id="stream-transfer-banner" class="stream-transfer-card" style="display: none;">
+                <div class="stream-transfer-header">
+                  <div style="display: flex; align-items: center; gap: 0.5rem;">
+                    <span class="stream-transfer-icon">📡</span>
+                    <span id="stream-transfer-title" style="font-weight: 700; color: #c084fc;">Transmitting Video to Remote Device...</span>
+                  </div>
+                  <span id="stream-transfer-percent" class="stream-transfer-badge">0%</span>
+                </div>
+                <div class="stream-progress-track">
+                  <div id="stream-transfer-bar" class="stream-progress-fill" style="width: 0%;"></div>
+                </div>
+                <div id="stream-transfer-sub" style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.35rem;">
+                  Your friend's screen will automatically stream and sync to your exact second.
+                </div>
+              </div>
 
-            <!-- Curated Demo Presets Carousel -->
-            <div class="preset-carousel-title">
-              <span>Quick Demo Movies & Streams (1-Click Sync)</span>
-              <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 400;">No URL required</span>
-            </div>
-            <div class="preset-cards-grid" id="preset-cards-container">
-              <!-- Dynamically populated from /api/presets -->
+              <form id="media-source-form" class="source-input-group">
+                <input type="text" id="video-url-input" class="input-field" placeholder="Paste YouTube link (e.g. youtube.com/watch?v=...) or direct MP4/WebM video URL" required>
+                <div class="source-btn-row">
+                  <button type="submit" class="btn btn-primary" id="btn-play-now">
+                    <span>▶ Play Now</span>
+                  </button>
+                  <button type="button" class="btn btn-secondary" id="btn-add-to-queue">
+                    <span>+ Queue</span>
+                  </button>
+                </div>
+              </form>
+
+              <!-- Curated Demo Presets Carousel -->
+              <div class="preset-carousel-title">
+                <span>Quick Demo Movies & Streams (1-Click Sync)</span>
+                <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 400;">No URL required</span>
+              </div>
+              <div class="preset-cards-grid" id="preset-cards-container">
+                <!-- Dynamically populated from /api/presets -->
+              </div>
             </div>
           </div>
         </div>
@@ -271,6 +277,9 @@
           <button type="button" class="tab-btn" data-tab="tab-queue">
             <span>📋 Queue</span>
             <span class="tab-badge" id="queue-count-badge">2</span>
+          </button>
+          <button type="button" class="tab-btn mobile-only-tab" data-tab="tab-media" style="display: none;">
+            <span>🎬 Media</span>
           </button>
           <button type="button" class="tab-btn" data-tab="tab-members">
             <span>👥 Viewers</span>
@@ -300,6 +309,11 @@
           <div class="queue-container" id="queue-items-list">
             <!-- Rendered dynamically -->
           </div>
+        </div>
+
+        <!-- Mobile Media Pane -->
+        <div class="tab-pane mobile-only-pane" id="tab-media">
+          <div id="mobile-media-container" class="mobile-media-scroll"></div>
         </div>
 
         <!-- Members Pane -->
@@ -430,6 +444,9 @@
           <label class="form-label">Pick Avatar</label>
           <div class="avatar-grid" id="prompt-avatar-grid">
             <button type="button" class="avatar-choice selected" data-emoji="🍿">🍿</button>
+            <button type="button" class="avatar-choice" data-emoji="/avatars/gojo.jpg" title="Satoru Gojo">
+              <img src="/avatars/gojo.jpg" alt="Gojo" class="avatar-choice-img">
+            </button>
             <button type="button" class="avatar-choice" data-emoji="🎬">🎬</button>
             <button type="button" class="avatar-choice" data-emoji="🦊">🦊</button>
             <button type="button" class="avatar-choice" data-emoji="🚀">🚀</button>

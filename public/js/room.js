@@ -60,6 +60,36 @@
   roomId = decodeURIComponent(pathParts[pathParts.length - 1] || 'default-room');
   if (roomIdDisplay) roomIdDisplay.textContent = roomId;
 
+  // Avatar Formatting Helper (supports emoji and image URLs)
+  function renderAvatar(avatar) {
+    if (!avatar) return '🍿';
+    if (avatar.startsWith('/') || avatar.startsWith('http') || avatar.includes('.jpg') || avatar.includes('.png')) {
+      return `<img src="${avatar}" alt="Avatar" class="avatar-img">`;
+    }
+    return avatar;
+  }
+
+  // Dynamic Media Section placement between desktop and mobile tabs
+  function syncMediaSectionPlacement() {
+    const isMobile = window.innerWidth <= 768;
+    const mediaSection = document.getElementById('media-source-section');
+    const desktopContainer = document.getElementById('desktop-media-container');
+    const mobileContainer = document.getElementById('mobile-media-container');
+    if (!mediaSection) return;
+
+    if (isMobile) {
+      if (mobileContainer && mediaSection.parentElement !== mobileContainer) {
+        mobileContainer.appendChild(mediaSection);
+      }
+    } else {
+      if (desktopContainer && mediaSection.parentElement !== desktopContainer) {
+        desktopContainer.appendChild(mediaSection);
+      }
+    }
+  }
+  window.addEventListener('resize', syncMediaSectionPlacement);
+  syncMediaSectionPlacement();
+
   // Sound Synthesizer via Web Audio API (Zero external assets)
   let audioCtx = null;
   function getAudioContext() {
@@ -730,10 +760,33 @@
 
   // Custom Controls Timeline & Event Bindings
   if (playPauseBtn) playPauseBtn.addEventListener('click', togglePlayPause);
+
+  let touchHideControlsTimer = null;
+  if (playerWrapper) {
+    playerWrapper.addEventListener('touchstart', (e) => {
+      if (e.target.closest('#custom-controls') || e.target.closest('.floating-reaction-item')) return;
+      playerWrapper.classList.add('show-controls');
+      clearTimeout(touchHideControlsTimer);
+      touchHideControlsTimer = setTimeout(() => {
+        playerWrapper.classList.remove('show-controls');
+      }, 3500);
+    }, { passive: true });
+  }
+
   if (videoViewport) {
-    // Click on video viewport toggles play/pause
+    // Click on video viewport toggles play/pause or toggles controls on touch
     document.getElementById('video-viewport')?.addEventListener('click', (e) => {
       if (e.target.closest('#custom-controls') || e.target.closest('.floating-reaction-item')) return;
+      if (window.innerWidth <= 768 && playerWrapper) {
+        if (!playerWrapper.classList.contains('show-controls')) {
+          playerWrapper.classList.add('show-controls');
+          clearTimeout(touchHideControlsTimer);
+          touchHideControlsTimer = setTimeout(() => {
+            playerWrapper.classList.remove('show-controls');
+          }, 3500);
+          return;
+        }
+      }
       togglePlayPause();
     });
   }
@@ -1378,7 +1431,15 @@
     if (msg.system) {
       const sysEl = document.createElement('div');
       sysEl.className = 'chat-system-message';
-      sysEl.textContent = msg.text;
+      const text = msg.text || '';
+      if (text.startsWith('/avatars/') || text.startsWith('http') || text.includes('.jpg') || text.includes('.png')) {
+        const parts = text.split(' ');
+        const imgUrl = parts[0];
+        const rest = parts.slice(1).join(' ');
+        sysEl.innerHTML = `<img src="${imgUrl}" alt="avatar" style="width: 16px; height: 16px; border-radius: 4px; vertical-align: middle; display: inline-block; margin-right: 4px; object-fit: cover;"> ${escapeHtml(rest)}`;
+      } else {
+        sysEl.textContent = text;
+      }
       chatMessagesList.appendChild(sysEl);
     } else {
       const msgEl = document.createElement('div');
@@ -1393,7 +1454,7 @@
       ` : '';
 
       msgEl.innerHTML = `
-        <div class="chat-avatar">${msg.user?.avatar || '🍿'}</div>
+        <div class="chat-avatar">${renderAvatar(msg.user?.avatar)}</div>
         <div class="chat-content">
           <div class="chat-author-line">
             <span class="chat-author ${isYou ? 'you' : ''}">
@@ -1497,7 +1558,7 @@
       return `
         <div class="member-item">
           <div class="member-info">
-            <span style="font-size: 1.3rem;">${user.avatar || '🍿'}</span>
+            <span style="font-size: 1.3rem; width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; border-radius: 4px; overflow: hidden;">${renderAvatar(user.avatar)}</span>
             <div>
               <div class="member-name">
                 ${escapeHtml(user.username)}

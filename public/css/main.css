@@ -422,9 +422,9 @@ body {
 }
 
 .avatar-choice {
-  width: 40px;
-  height: 40px;
-  min-width: 40px;
+  width: 42px;
+  height: 42px;
+  min-width: 42px;
   border-radius: var(--radius-md);
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid var(--border-subtle);
@@ -434,6 +434,25 @@ body {
   font-size: 1.25rem;
   cursor: pointer;
   transition: all 0.2s ease;
+  overflow: hidden;
+  padding: 0;
+}
+
+.avatar-choice-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: inherit;
+  display: block;
+  pointer-events: none;
+}
+
+.avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: inherit;
+  display: block;
 }
 
 .avatar-choice:hover {
@@ -587,12 +606,16 @@ body {
   padding: 0 1.5rem;
   z-index: 40;
   flex-shrink: 0;
+  gap: 0.75rem;
 }
 
 .room-info-cluster {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 0.85rem;
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
 }
 
 .room-title-display {
@@ -601,6 +624,17 @@ body {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+#room-name-header {
+  font-size: 0.95rem;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 220px;
 }
 
 .room-code-tag {
@@ -613,9 +647,20 @@ body {
   color: var(--accent-cyan);
   cursor: pointer;
   transition: all 0.2s;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 0.35rem;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+#room-id-display {
+  display: inline-block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 140px;
+  vertical-align: middle;
 }
 
 .room-code-tag:hover {
@@ -1063,10 +1108,17 @@ body {
   display: flex;
   gap: 0.75rem;
   margin-bottom: 1.25rem;
+  align-items: center;
 }
 
 .source-input-group .input-field {
   flex: 1;
+}
+
+.source-btn-row {
+  display: flex;
+  gap: 0.5rem;
+  flex-shrink: 0;
 }
 
 .preset-carousel-title {
@@ -1546,29 +1598,482 @@ body {
 }
 
 /* Responsive adjustments */
-@media (max-width: 1024px) {
-  .theater-workspace {
-    grid-template-columns: 1fr;
-    grid-template-rows: auto 360px;
-  }
-  .theater-sidebar {
-    border-left: none;
-    border-top: 1px solid var(--border-subtle);
+@media (min-width: 769px) {
+  .mobile-only-tab,
+  .mobile-only-pane {
+    display: none !important;
   }
 }
 
-@media (max-width: 640px) {
-  .hero-title {
-    font-size: 2.25rem;
+@media (max-width: 1024px) and (min-width: 769px) {
+  .theater-workspace {
+    grid-template-columns: 1fr 340px;
   }
-  .room-creation-container {
-    grid-template-columns: 1fr;
+  .room-info-cluster {
+    gap: 0.5rem;
   }
-  .site-nav, .theater-navbar {
-    padding: 0 1rem;
+  #room-name-header {
+    max-width: 150px;
   }
+}
+
+/* ========================================================
+   FLAGSHIP ULTRA-PREMIUM MOBILE EXPERIENCE (<= 768px)
+   ======================================================== */
+@media (max-width: 768px) {
+  .mobile-only-tab {
+    display: flex !important;
+  }
+
+  /* Full viewport container with dynamic viewport units support */
+  .theater-container {
+    height: 100dvh;
+    height: 100vh;
+    overflow: hidden;
+    background: #040509;
+  }
+
+  /* Ultra-clean, non-overflowing Mobile Navbar */
+  .theater-navbar {
+    height: 52px;
+    padding: 0 0.65rem;
+    gap: 0.4rem;
+    background: rgba(8, 9, 16, 0.96);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .room-info-cluster {
+    gap: 0.4rem;
+    min-width: 0;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  .nav-brand {
+    font-size: 0.95rem !important;
+    gap: 0.35rem;
+    flex-shrink: 0;
+  }
+
+  .nav-brand .brand-icon {
+    width: 28px !important;
+    height: 28px !important;
+    font-size: 0.95rem !important;
+  }
+
+  .header-divider {
+    display: none !important;
+  }
+
+  .room-title-display {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+  }
+
+  /* Hide long room name on mobile, keep clean #room-id tag */
+  #room-name-header {
+    display: none !important;
+  }
+
+  .room-code-tag {
+    font-size: 0.72rem;
+    padding: 2px 7px;
+    border-radius: var(--radius-full);
+    white-space: nowrap;
+    background: rgba(6, 182, 212, 0.12);
+    border-color: rgba(6, 182, 212, 0.3);
+  }
+
+  #room-id-display {
+    max-width: 105px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* Dynamic Island Sync Capsule on Mobile */
+  .dynamic-island-capsule {
+    padding: 2px 7px;
+    font-size: 0.7rem;
+    gap: 0.3rem;
+  }
+
+  .sync-beacon {
+    font-size: 0.7rem;
+    padding: 1px 4px;
+    background: transparent;
+    border: none;
+  }
+
+  /* Circular Glassmorphism Icon Action Buttons on Mobile */
+  .nav-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    flex-shrink: 0;
+  }
+
+  .nav-btn-share,
+  .nav-btn-settings {
+    width: 34px;
+    height: 34px;
+    padding: 0;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    transition: all 0.2s ease;
+  }
+
+  .nav-btn-share:hover,
+  .nav-btn-settings:hover {
+    background: rgba(139, 92, 246, 0.25);
+    border-color: var(--accent-purple);
+    transform: scale(1.05);
+  }
+
+  .nav-btn-label {
+    display: none !important;
+  }
+
+  .nav-btn-icon {
+    font-size: 0.95rem;
+    line-height: 1;
+  }
+
+  /* Single Unified Column Workspace */
+  .theater-workspace {
+    display: flex;
+    flex-direction: column;
+    height: calc(100dvh - 52px);
+    height: calc(100vh - 52px);
+    overflow: hidden;
+    grid-template-columns: none;
+    grid-template-rows: none;
+  }
+
+  /* Pinned / Sticky Video Stage at the Top */
+  .video-stage {
+    flex-shrink: 0;
+    overflow: visible;
+    background: #000;
+    z-index: 25;
+  }
+
+  .video-player-wrapper {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    max-height: 35vh;
+    box-shadow: 0 4px 25px rgba(0, 0, 0, 0.8);
+  }
+
+  /* Custom controls tuned for mobile touch */
+  .custom-controls-bar {
+    bottom: 8px;
+    left: 8px;
+    right: 8px;
+    padding: 0.45rem 0.65rem;
+    gap: 0.3rem;
+    border-radius: var(--radius-md);
+  }
+
+  .controls-row {
+    gap: 0.35rem;
+  }
+
+  .controls-left, .controls-right {
+    gap: 0.35rem;
+  }
+
+  .ctrl-btn {
+    width: 32px;
+    height: 32px;
+    font-size: 0.95rem;
+  }
+
+  .volume-control-wrap .volume-slider {
+    display: none !important;
+  }
+
+  .time-display {
+    font-size: 0.72rem;
+  }
+
+  #ctrl-playback-rate {
+    padding: 0.15rem 0.3rem;
+    font-size: 0.7rem;
+    height: 28px;
+  }
+
+  #btn-force-sync {
+    padding: 0.2rem 0.4rem !important;
+    font-size: 0.7rem !important;
+  }
+
+  #ctrl-pip-btn {
+    display: none;
+  }
+
+  /* Compact Video Title & Scrolling Reactions Bar */
+  .stage-details {
+    padding: 0.5rem 0.75rem;
+    gap: 0.4rem;
+    background: rgba(10, 12, 22, 0.98);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .video-header-card {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.35rem;
+  }
+
+  .now-playing-tag {
+    font-size: 0.65rem;
+    margin-bottom: 1px;
+    letter-spacing: 0.06em;
+  }
+
+  .video-active-title {
+    font-size: 1rem;
+    font-weight: 700;
+    line-height: 1.25;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .reaction-bar {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    gap: 0.4rem;
+    padding: 4px 8px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: var(--radius-full);
+  }
+
+  .reaction-bar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .react-btn {
+    font-size: 1.25rem;
+    padding: 2px 6px;
+    flex-shrink: 0;
+  }
+
+  /* Hide desktop media container on mobile (moved into tab-media) */
+  #desktop-media-container {
+    display: none !important;
+  }
+
+  /* Full-Height Mobile Tabbed View (Chat, Queue, Media, Viewers) */
+  .theater-sidebar {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border-left: none;
+    border-top: none;
+    background: #07080f;
+  }
+
+  .sidebar-tabs {
+    flex-shrink: 0;
+    background: rgba(12, 14, 24, 0.95);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    display: flex;
+  }
+
+  .tab-btn {
+    flex: 1;
+    padding: 0.65rem 0.2rem;
+    font-size: 0.78rem;
+    font-weight: 600;
+    gap: 0.25rem;
+    white-space: nowrap;
+  }
+
+  .tab-pane {
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .chat-messages-container {
+    padding: 0.65rem;
+    gap: 0.5rem;
+  }
+
+  .chat-message {
+    gap: 0.45rem;
+  }
+
+  .chat-avatar {
+    width: 28px;
+    height: 28px;
+    font-size: 1.1rem;
+  }
+
+  .chat-content {
+    padding: 0.45rem 0.65rem;
+    border-radius: 4px 10px 10px 10px;
+  }
+
+  .chat-text {
+    font-size: 0.84rem;
+  }
+
+  .chat-input-bar {
+    padding: 0.5rem 0.65rem;
+    padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+    background: rgba(10, 11, 20, 0.98);
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .chat-stamp-btn {
+    padding: 0.4rem 0.5rem;
+    font-size: 0.68rem;
+  }
+
+  .chat-input-bar .input-field {
+    font-size: 0.84rem;
+    padding: 0.45rem 0.65rem;
+  }
+
+  /* Mobile Media Scroll Pane */
+  .mobile-media-scroll {
+    padding: 0.75rem;
+    overflow-y: auto;
+    height: 100%;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .media-source-section {
+    padding: 0.85rem;
+    border-radius: var(--radius-md);
+  }
+
+  .source-input-group {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+  }
+
+  .source-btn-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
+    width: 100%;
+  }
+
+  .source-btn-row .btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .preset-carousel-title {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    margin-bottom: 0.6rem;
+  }
+
   .preset-cards-grid {
     grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
+  }
+
+  .preset-info {
+    padding: 0.45rem 0.55rem;
+  }
+
+  .preset-title {
+    font-size: 0.78rem;
+  }
+
+  .preset-type {
+    font-size: 0.68rem;
+  }
+
+  /* Queue and Members panes on mobile */
+  .queue-container {
+    padding: 0.65rem;
+    gap: 0.5rem;
+  }
+
+  .queue-item {
+    padding: 0.55rem;
+    gap: 0.55rem;
+  }
+
+  .queue-thumb {
+    width: 48px;
+    height: 34px;
+  }
+
+  .queue-title {
+    font-size: 0.8rem;
+  }
+
+  .members-container {
+    padding: 0.65rem;
+    gap: 0.45rem;
+  }
+
+  .member-item {
+    padding: 0.55rem 0.7rem;
+  }
+
+  /* Landing page mobile refinements */
+  .hero-title {
+    font-size: 2.1rem;
+    line-height: 1.15;
+  }
+
+  .hero-subtitle {
+    font-size: 0.95rem;
+  }
+
+  .room-creation-container {
+    grid-template-columns: 1fr;
+    gap: 1.25rem;
+  }
+
+  .site-nav {
+    padding: 0 0.85rem;
+  }
+}
+
+@media (max-width: 400px) {
+  #room-id-display {
+    max-width: 80px;
+  }
+
+  .dynamic-island-capsule {
+    padding: 2px 5px;
+  }
+
+  #sync-status-text {
+    font-size: 0.66rem;
+  }
+
+  .tab-btn {
+    font-size: 0.74rem;
+    padding: 0.6rem 0.15rem;
   }
 }
 
