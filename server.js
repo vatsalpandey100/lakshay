@@ -704,6 +704,78 @@ io.on('connection', (socket) => {
     }
   });
 
+  // End session (for all if host, or individual leave)
+  socket.on('end-session', () => {
+    if (!currentRoomId || !rooms.has(currentRoomId)) return;
+    const room = rooms.get(currentRoomId);
+    const user = room.users.get(socket.id);
+    const isHost = (room.hostId === socket.id);
+
+    if (isHost) {
+      const endMsg = {
+        id: `sys-${Date.now()}-ended`,
+        system: true,
+        text: `🚪 Watch party session ended by Host (${room.hostName || user?.username || 'Lakshay'}).`,
+        timestamp: Date.now()
+      };
+      io.to(currentRoomId).emit('session-ended', {
+        by: room.hostName || user?.username || 'Host',
+        reason: 'Host ended the watch party session for everyone.',
+        message: endMsg
+      });
+
+      rooms.delete(currentRoomId);
+    } else {
+      if (user) {
+        room.users.delete(socket.id);
+        const leaveMsg = {
+          id: `sys-${Date.now()}`,
+          system: true,
+          text: `${user.avatar} ${user.username} left the room.`,
+          timestamp: Date.now()
+        };
+        room.messages.push(leaveMsg);
+        io.to(currentRoomId).emit('user-left', {
+          socketId: socket.id,
+          users: Array.from(room.users.values()),
+          message: leaveMsg
+        });
+      }
+      socket.leave(currentRoomId);
+      socket.emit('session-ended', {
+        by: 'You',
+        reason: 'You left the watch party.'
+      });
+    }
+  });
+
+  // Explicit leave room (keeps session active for others)
+  socket.on('leave-room', () => {
+    if (!currentRoomId || !rooms.has(currentRoomId)) return;
+    const room = rooms.get(currentRoomId);
+    const user = room.users.get(socket.id);
+    if (user) {
+      room.users.delete(socket.id);
+      const leaveMsg = {
+        id: `sys-${Date.now()}`,
+        system: true,
+        text: `${user.avatar} ${user.username} left the room.`,
+        timestamp: Date.now()
+      };
+      room.messages.push(leaveMsg);
+      io.to(currentRoomId).emit('user-left', {
+        socketId: socket.id,
+        users: Array.from(room.users.values()),
+        message: leaveMsg
+      });
+    }
+    socket.leave(currentRoomId);
+    socket.emit('session-ended', {
+      by: 'You',
+      reason: 'You left the watch party.'
+    });
+  });
+
   // Disconnection handler
   socket.on('disconnect', () => {
     if (currentRoomId && rooms.has(currentRoomId)) {

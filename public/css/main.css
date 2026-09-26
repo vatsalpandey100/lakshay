@@ -214,6 +214,33 @@ body {
   transform: translateY(-1px);
 }
 
+.btn-danger {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  color: #ffffff;
+  box-shadow: 0 4px 18px rgba(239, 68, 68, 0.35);
+  border: 1px solid rgba(239, 68, 68, 0.5);
+}
+
+.btn-danger:hover {
+  background: linear-gradient(135deg, #f87171 0%, #ef4444 100%);
+  box-shadow: 0 6px 24px rgba(239, 68, 68, 0.55);
+  transform: translateY(-1px);
+}
+
+.nav-btn-leave {
+  background: rgba(239, 68, 68, 0.12) !important;
+  border: 1px solid rgba(239, 68, 68, 0.3) !important;
+  color: #fca5a5 !important;
+  transition: all 0.2s ease !important;
+}
+
+.nav-btn-leave:hover {
+  background: rgba(239, 68, 68, 0.28) !important;
+  border-color: #ef4444 !important;
+  color: #ffffff !important;
+  transform: translateY(-1px);
+}
+
 .btn-ghost {
   background: transparent;
   color: var(--text-secondary);
@@ -2634,7 +2661,8 @@ video::cue {
   }
 
   .nav-btn-share,
-  .nav-btn-settings {
+  .nav-btn-settings,
+  .nav-btn-leave {
     width: 34px;
     height: 34px;
     padding: 0;
@@ -2647,10 +2675,21 @@ video::cue {
     transition: all 0.2s ease;
   }
 
+  .nav-btn-leave {
+    background: rgba(239, 68, 68, 0.15) !important;
+    border-color: rgba(239, 68, 68, 0.35) !important;
+  }
+
   .nav-btn-share:hover,
   .nav-btn-settings:hover {
     background: rgba(139, 92, 246, 0.25);
     border-color: var(--accent-purple);
+    transform: scale(1.05);
+  }
+
+  .nav-btn-leave:hover {
+    background: rgba(239, 68, 68, 0.3) !important;
+    border-color: #ef4444 !important;
     transform: scale(1.05);
   }
 

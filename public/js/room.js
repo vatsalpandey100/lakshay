@@ -274,6 +274,14 @@
       appendChatMessage(message);
     });
 
+    socket.on('session-ended', ({ by, reason, message }) => {
+      if (message) appendChatMessage(message);
+      showToast(reason || 'Watch party session has ended.', 'info');
+      setTimeout(() => {
+        window.location.href = '/';
+      }, 1500);
+    });
+
     socket.on('sync-playback', (data) => {
       handleServerPlaybackSync(data);
     });
@@ -1194,6 +1202,33 @@
       if (hostPill) {
         hostPill.innerHTML = `<span>${escapeHtml(roomState?.name || 'Party')}</span> <span class="member-badge" style="margin-left: 6px;">👑 You (Host)</span>`;
       }
+    }
+
+    updateEndSessionModalContent(isHost);
+  }
+
+  function updateEndSessionModalContent(isHost) {
+    const leaveLabel = document.getElementById('btn-leave-label');
+    const title = document.getElementById('end-session-title');
+    const desc = document.getElementById('end-session-desc');
+    const hostActions = document.getElementById('host-end-actions');
+    const guestActions = document.getElementById('guest-leave-actions');
+    const settingsBtn = document.getElementById('btn-settings-end-session');
+
+    if (isHost) {
+      if (leaveLabel) leaveLabel.textContent = 'End Session';
+      if (title) title.textContent = '🚪 End Party Session';
+      if (desc) desc.textContent = 'You are the host. Would you like to end the session for everyone or leave the room?';
+      if (hostActions) hostActions.style.display = 'flex';
+      if (guestActions) guestActions.style.display = 'none';
+      if (settingsBtn) settingsBtn.textContent = 'End Session';
+    } else {
+      if (leaveLabel) leaveLabel.textContent = 'Leave Party';
+      if (title) title.textContent = '🚪 Leave Watch Party';
+      if (desc) desc.textContent = 'Are you sure you want to leave this watch party? You can re-join anytime using the room code.';
+      if (hostActions) hostActions.style.display = 'none';
+      if (guestActions) guestActions.style.display = 'flex';
+      if (settingsBtn) settingsBtn.textContent = 'Leave Party';
     }
   }
 
@@ -2917,6 +2952,48 @@
     if (socket && currentUser?.isHost) {
       socket.emit('toggle-host-lock');
     }
+  });
+
+  // End Session & Leave Party Handlers
+  const endSessionModal = document.getElementById('modal-end-session');
+
+  function openEndSessionModal() {
+    updateEndSessionModalContent(Boolean(currentUser?.isHost));
+    endSessionModal?.classList.add('open');
+  }
+
+  document.getElementById('btn-open-end-session')?.addEventListener('click', openEndSessionModal);
+
+  document.getElementById('btn-settings-end-session')?.addEventListener('click', () => {
+    settingsModal?.classList.remove('open');
+    openEndSessionModal();
+  });
+
+  document.getElementById('btn-confirm-end-all')?.addEventListener('click', () => {
+    if (socket) socket.emit('end-session');
+    showToast('Ending party session...', 'info');
+    endSessionModal?.classList.remove('open');
+    setTimeout(() => {
+      window.location.href = '/';
+    }, 500);
+  });
+
+  document.getElementById('btn-confirm-leave-only')?.addEventListener('click', () => {
+    if (socket) socket.emit('leave-room');
+    showToast('Leaving room...', 'info');
+    endSessionModal?.classList.remove('open');
+    setTimeout(() => {
+      window.location.href = '/';
+    }, 500);
+  });
+
+  document.getElementById('btn-confirm-guest-leave')?.addEventListener('click', () => {
+    if (socket) socket.emit('leave-room');
+    showToast('Leaving room...', 'info');
+    endSessionModal?.classList.remove('open');
+    setTimeout(() => {
+      window.location.href = '/';
+    }, 500);
   });
 
   // Close Modals
