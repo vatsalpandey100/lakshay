@@ -851,11 +851,11 @@
   // Custom Controls Timeline & Event Bindings
   if (playPauseBtn) playPauseBtn.addEventListener('click', togglePlayPause);
 
-  // Controls Auto-Hide & Cursor Management
-  // User Requirement: Hovering through bottom 1/10 of video then only that control should be shown
+  // Controls Auto-Hide, Touch & Cursor Management
   let controlsHideTimer = null;
   let isSubtitleMenuOpen = false;
   let isScrubbingTimeline = false;
+  let lastTouchInteractionTime = 0;
 
   function isCursorInBottomTenth(e) {
     if (!playerWrapper) return false;
@@ -868,7 +868,7 @@
 
   let cursorHideTimer = null;
 
-  function showControls(durationMs = 3200) {
+  function showControls(durationMs = 3500) {
     if (!playerWrapper) return;
     playerWrapper.classList.add('show-controls');
     playerWrapper.classList.remove('hide-cursor', 'hide-controls-idle');
@@ -876,15 +876,16 @@
 
     controlsHideTimer = setTimeout(() => {
       if (isSubtitleMenuOpen || isScrubbingTimeline) return;
+      if (html5Player && html5Player.paused) return; // Keep visible while paused
       playerWrapper.classList.remove('show-controls');
       playerWrapper.classList.add('hide-controls-idle');
     }, durationMs);
   }
 
   function hideControlsOnly() {
-    // Only hides the controls bar — NEVER hides the cursor immediately
     if (!playerWrapper) return;
     if (isSubtitleMenuOpen || isScrubbingTimeline) return;
+    if (html5Player && html5Player.paused) return; // Keep visible while paused
     playerWrapper.classList.remove('show-controls', 'is-paused');
     playerWrapper.classList.add('hide-controls-idle');
   }
@@ -892,6 +893,7 @@
   function hideControlsNow() {
     if (!playerWrapper) return;
     if (isSubtitleMenuOpen || isScrubbingTimeline) return;
+    if (html5Player && html5Player.paused) return;
     playerWrapper.classList.remove('show-controls', 'is-paused');
     playerWrapper.classList.add('hide-cursor', 'hide-controls-idle');
   }
@@ -907,12 +909,20 @@
     }, 2800);
   }
 
+  function seekDelta(seconds) {
+    const target = Math.max(0, getCurrentPlaybackTime() + seconds);
+    seekToTime(target);
+    emitPlaybackAction('seek', target);
+    triggerActionSplash(seconds < 0 ? '↺ 10' : '10 ↻');
+  }
+
   if (playerWrapper) {
     // Show controls initially briefly
-    showControls(3000);
+    showControls(3500);
 
-    // Mouse movement: Controls only show when hovering bottom 1/10th, cursor always remains visible while moving
+    // Desktop Mouse movement (Ignored if triggered by mobile touch gesture)
     playerWrapper.addEventListener('mouseenter', (e) => {
+      if (Date.now() - lastTouchInteractionTime < 1500) return;
       resetCursorIdleTimer();
       if (isCursorInBottomTenth(e)) {
         showControls(3200);
@@ -922,6 +932,7 @@
     });
 
     playerWrapper.addEventListener('mousemove', (e) => {
+      if (Date.now() - lastTouchInteractionTime < 1500) return;
       resetCursorIdleTimer();
       if (isCursorInBottomTenth(e) || isScrubbingTimeline) {
         showControls(3200);
@@ -932,42 +943,107 @@
       }
     });
 
-    // Mouse leaving player hides controls immediately
+    // Mouse leaving player hides controls immediately (Desktop only)
     playerWrapper.addEventListener('mouseleave', () => {
+      if (Date.now() - lastTouchInteractionTime < 1500) return;
       clearTimeout(controlsHideTimer);
       hideControlsNow();
     });
 
-    // Touch support for mobile
+    // High-performance touch interaction for mobile & tablet screens
+    let touchStartX = 0;
+    let touchStartY = 0;
+    let touchStartTime = 0;
+    let isTouchMoved = false;
+    let lastTapTimestamp = 0;
+
     playerWrapper.addEventListener('touchstart', (e) => {
-      if (e.target.closest('#custom-controls') || e.target.closest('.floating-reaction-item') || e.target.closest('#video-floating-chat-overlay') || e.target.closest('#video-corner-chat-btn')) return;
+      lastTouchInteractionTime = Date.now();
+      if (
+        e.target.closest('#custom-controls') || 
+        e.target.closest('.floating-reaction-item') || 
+        e.target.closest('#video-floating-chat-overlay') || 
+        e.target.closest('#video-corner-chat-btn') ||
+        e.target.closest('#subtitle-menu') ||
+        e.target.closest('.viewer-start-overlay')
+      ) {
+        // Interacting with controls directly: keep controls open!
+        showControls(4500);
+        return;
+      }
+
+      const touch = e.touches[0];
+      if (!touch) return;
+      touchStartX = touch.clientX;
+      touchStartY = touch.clientY;
+      touchStartTime = Date.now();
+      isTouchMoved = false;
+    }, { passive: true });
+
+    playerWrapper.addEventListener('touchmove', (e) => {
+      lastTouchInteractionTime = Date.now();
       const touch = e.touches[0];
       if (touch) {
-        const rect = playerWrapper.getBoundingClientRect();
-        const touchY = touch.clientY - rect.top;
-        if (touchY >= rect.height * 0.88) {
-          showControls(3500);
+        if (Math.abs(touch.clientX - touchStartX) > 12 || Math.abs(touch.clientY - touchStartY) > 12) {
+          isTouchMoved = true;
+        }
+      }
+    }, { passive: true });
+
+    playerWrapper.addEventListener('touchend', (e) => {
+      lastTouchInteractionTime = Date.now();
+      if (
+        e.target.closest('#custom-controls') || 
+        e.target.closest('.floating-reaction-item') || 
+        e.target.closest('#video-floating-chat-overlay') || 
+        e.target.closest('#video-corner-chat-btn') ||
+        e.target.closest('#subtitle-menu') ||
+        e.target.closest('.viewer-start-overlay')
+      ) return;
+
+      const touchDuration = Date.now() - touchStartTime;
+      if (!isTouchMoved && touchDuration < 450) {
+        const now = Date.now();
+        const isDoubleTap = (now - lastTapTimestamp < 350);
+        lastTapTimestamp = now;
+
+        if (isDoubleTap) {
+          // Double-tap left 35% seeks -10s, right 35% seeks +10s
+          const rect = playerWrapper.getBoundingClientRect();
+          const relativeX = touchStartX - rect.left;
+          if (relativeX < rect.width * 0.35) {
+            seekDelta(-10);
+            showControls(3500);
+            return;
+          } else if (relativeX > rect.width * 0.65) {
+            seekDelta(10);
+            showControls(3500);
+            return;
+          }
+        }
+
+        // Single tap on mobile video cleanly toggles controls
+        if (playerWrapper.classList.contains('show-controls')) {
+          hideControlsOnly();
+        } else {
+          showControls(4000);
         }
       }
     }, { passive: true });
   }
 
   if (videoViewport) {
-    // Click on video viewport toggles play/pause or toggles controls on touch
+    // Desktop mouse click on video viewport toggles play/pause (shielded from mobile tap)
     document.getElementById('video-viewport')?.addEventListener('click', (e) => {
+      if (Date.now() - lastTouchInteractionTime < 1200) return;
       if (
         e.target.closest('#custom-controls') || 
         e.target.closest('.floating-reaction-item') || 
         e.target.closest('#subtitle-menu') ||
         e.target.closest('#video-floating-chat-overlay') ||
-        e.target.closest('#video-corner-chat-btn')
+        e.target.closest('#video-corner-chat-btn') ||
+        e.target.closest('.viewer-start-overlay')
       ) return;
-      if (window.innerWidth <= 768 && playerWrapper) {
-        if (!playerWrapper.classList.contains('show-controls')) {
-          showControls(3500);
-          return;
-        }
-      }
       togglePlayPause();
     });
   }
@@ -1123,17 +1199,11 @@
 
   // Rewind & Forward 10s
   document.getElementById('ctrl-rewind')?.addEventListener('click', () => {
-    const target = Math.max(0, getCurrentPlaybackTime() - 10);
-    seekToTime(target);
-    emitPlaybackAction('seek', target);
-    triggerActionSplash('↺ 10');
+    seekDelta(-10);
   });
 
   document.getElementById('ctrl-forward')?.addEventListener('click', () => {
-    const target = getCurrentPlaybackTime() + 10;
-    seekToTime(target);
-    emitPlaybackAction('seek', target);
-    triggerActionSplash('10 ↻');
+    seekDelta(10);
   });
 
   // Volume & Mute
