@@ -316,6 +316,7 @@
 
     socket.on('floating-reaction', (data) => {
       spawnFloatingReaction(data.emoji);
+      triggerReactionPill(data.emoji);
       playUiTone('pop');
     });
 
@@ -1113,13 +1114,31 @@
     }, 2800);
   }
 
+  // Anime Reaction Bar Functionality
+  function triggerReactionPill(emoji) {
+    if (!emoji) return;
+    const btn = document.querySelector(`.reaction-bar [data-emoji="${emoji}"]`);
+    if (btn) {
+      btn.classList.remove('pill-bump');
+      // Trigger reflow to restart animation if clicked rapidly
+      void btn.offsetWidth;
+      btn.classList.add('pill-bump', 'has-bumped');
+      const countEl = btn.querySelector('.react-count');
+      if (countEl) {
+        const cur = parseInt(countEl.textContent || '0', 10) || 0;
+        countEl.textContent = cur + 1;
+      }
+    }
+  }
+
   // Reaction Bar Click Events
-  document.querySelectorAll('.reaction-bar .react-btn').forEach(btn => {
+  document.querySelectorAll('.reaction-bar .react-pill-btn, .reaction-bar .react-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       const emoji = btn.dataset.emoji;
       if (socket && emoji) {
         socket.emit('send-reaction', { emoji });
         spawnFloatingReaction(emoji);
+        triggerReactionPill(emoji);
         playUiTone('pop');
       }
     });
