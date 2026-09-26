@@ -1083,7 +1083,7 @@ video::cue {
 /* Individual floating message row - 100% transparent background */
 .floating-msg-row {
   display: inline-flex;
-  align-items: baseline;
+  align-items: center;
   gap: 6px;
   max-width: 100%;
   pointer-events: auto;
@@ -1118,10 +1118,31 @@ video::cue {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.95rem;
+  width: 20px;
+  height: 20px;
+  min-width: 20px;
+  min-height: 20px;
+  max-width: 20px;
+  max-height: 20px;
+  font-size: 0.92rem;
   line-height: 1;
   flex-shrink: 0;
+  border-radius: 50%;
+  overflow: hidden;
   vertical-align: middle;
+}
+
+.floating-msg-avatar img,
+.floating-msg-avatar .avatar-img {
+  width: 20px !important;
+  height: 20px !important;
+  min-width: 20px !important;
+  min-height: 20px !important;
+  max-width: 20px !important;
+  max-height: 20px !important;
+  object-fit: cover !important;
+  border-radius: 50% !important;
+  display: block !important;
 }
 
 .floating-msg-author {
@@ -1980,6 +2001,16 @@ video::cue {
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  overflow: hidden;
+}
+
+.chat-avatar img,
+.chat-avatar .avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: inherit;
+  display: block;
 }
 
 .chat-content {
@@ -2115,6 +2146,23 @@ video::cue {
 .typing-avatar {
   font-size: 0.9rem;
   line-height: 1;
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.typing-avatar img,
+.typing-avatar .avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+  display: block;
 }
 
 .typing-dots {
