@@ -78,10 +78,7 @@ function getOrCreateRoom(roomId, roomName = null) {
         lastTimestamp: Date.now(),
         playbackRate: 1.0
       },
-      queue: [
-        { ...PRESET_VIDEOS[1], addedBy: 'System' },
-        { ...PRESET_VIDEOS[2], addedBy: 'System' }
-      ],
+      queue: [],
       users: new Map(), // socketId -> userData
       messages: [
         {
