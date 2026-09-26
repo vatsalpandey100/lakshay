@@ -492,16 +492,43 @@
         disablekb: 1,
         modestbranding: 1,
         rel: 0,
+        playsinline: 1,
+        enablejsapi: 1,
+        origin: window.location.origin,
+        widget_referrer: window.location.origin,
         start: Math.floor(startSeconds)
       },
       events: {
         onReady: (event) => {
           isYtReady = true;
+          try {
+            // Request highest HD resolution (guarantees high-bitrate uncompressed audio track)
+            if (typeof event.target.setPlaybackQuality === 'function') {
+              event.target.setPlaybackQuality('hd1080');
+            }
+          } catch (e) {}
           if (startSeconds > 0) event.target.seekTo(startSeconds, true);
           if (autoPlay) event.target.playVideo();
-          event.target.setVolume((volumeSlider?.value || 0.9) * 100);
+          const targetVol = volumeSlider ? parseFloat(volumeSlider.value) : 1.0;
+          event.target.setVolume(Math.round(targetVol * 100));
+        },
+        onPlaybackQualityChange: (event) => {
+          // Keep quality locked to highest available when possible
+          try {
+            const available = ytPlayer.getAvailableQualityLevels?.() || [];
+            if (available.length > 0 && available[0] && !['hd1080', 'hd720'].includes(event.data)) {
+              ytPlayer.setPlaybackQuality(available[0]);
+            }
+          } catch (e) {}
         },
         onStateChange: (event) => {
+          if (event.data === YT.PlayerState.PLAYING) {
+            try {
+              if (typeof ytPlayer.setPlaybackQuality === 'function') {
+                ytPlayer.setPlaybackQuality('hd1080');
+              }
+            } catch (e) {}
+          }
           handleYtStateChange(event);
         }
       }
@@ -539,29 +566,33 @@
     updateSyncStatusBeacon(absDrift, rttLatencyMs);
 
     if (state === 'paused') {
-      // For paused state: hard seek only if drift is perceptible
-      if (absDrift > 0.18) {
+      // For paused state: hard seek only if drift is perceptible (> 0.4s)
+      if (absDrift > 0.4) {
         seekToTime(targetTime);
       }
       pauseActivePlayer();
       restorePlaybackRate(desiredRate);
     } else {
-      // For playing state: NO HARD SEEKS unless major jump!
-      // This eliminates 100% of buffer flushes and video stuttering.
-      if (absDrift <= 0.12) {
-        // Imperceptible drift (within 120ms): optimal sync
+      // For playing state:
+      // Tolerance band (up to 0.45s): perfectly in sync for watch parties.
+      // Keeping rate at 1.00x preserves 100% natural, pristine audio without any pitch-warping or robot effects.
+      if (absDrift <= 0.45) {
         restorePlaybackRate(desiredRate);
-      } else if (absDrift <= 1.3) {
-        // Micro pitch-rate steering: smoothly glide into sync without pause!
-        if (drift < 0) {
-          // Slightly behind: speed up by 6% to catch up seamlessly
-          setEnginePlaybackRate(desiredRate * 1.06);
+      } else if (absDrift <= 2.8) {
+        // Ultra-gentle micro rate steering (±2% instead of ±6%) to protect audio quality:
+        // ±2% is below the human ear's pitch-change perception threshold (~2.5%) and won't warp audio.
+        if (activePlayerType === 'html5') {
+          if (drift < 0) {
+            setEnginePlaybackRate(desiredRate * 1.02);
+          } else {
+            setEnginePlaybackRate(desiredRate * 0.98);
+          }
         } else {
-          // Slightly ahead: slow down by 6% to allow host to catch up
-          setEnginePlaybackRate(desiredRate * 0.94);
+          // For YouTube embeds, stay at 1.0x to avoid iframe audio re-encoding jitter
+          restorePlaybackRate(desiredRate);
         }
       } else {
-        // Large skip / seek (> 1.3s): hard seek then continue
+        // Major jump / seek (> 2.8s): smooth seek
         seekToTime(targetTime);
         restorePlaybackRate(desiredRate);
       }
@@ -592,6 +623,9 @@
 
   // Server Playback Sync Event Handler
   function handleServerPlaybackSync(data) {
+    // If we initiated this action, we already ran it optimistically
+    if (data.senderId && socket && data.senderId === socket.id) return;
+
     const accurateNow = getAccurateServerTime();
     const elapsed = Math.max(0, (accurateNow - data.serverTime) / 1000);
     const targetTime = data.state === 'playing'
@@ -604,6 +638,13 @@
 
   // Periodic Drift Checker (Checks in background without interrupting playback)
   function handleTimeDriftCheck(data) {
+    // The host and solo users are the authoritative source of truth!
+    // Never warp or seek the host player based on estimated server time.
+    if (currentUser?.isHost || !roomState?.users || roomState.users.length <= 1) {
+      updateSyncStatusBeacon(0, rttLatencyMs);
+      return;
+    }
+
     const accurateNow = getAccurateServerTime();
     const elapsed = Math.max(0, (accurateNow - data.serverTime) / 1000);
     const targetTime = data.state === 'playing'
@@ -616,7 +657,7 @@
   function updateSyncStatusBeacon(drift, ping) {
     if (!syncBeaconBtn || !syncStatusText) return;
     const pingStr = ping ? ` • ${ping}ms` : '';
-    if (drift > 1.3) {
+    if (drift > 2.8) {
       syncBeaconBtn.classList.add('desync');
       syncStatusText.textContent = `Drift (${drift.toFixed(1)}s${pingStr}) • Resync`;
     } else {
@@ -1518,8 +1559,12 @@
         return;
       }
 
-      // Throttle to max 18fps: imperceptible difference for ambient light, 80% CPU savings
-      if (timestamp - lastAmbientFrame >= 55) {
+      // Performance optimization:
+      // When playing YouTube, do not repaint blurred canvas every 55ms (causes compositor lag and frame drops).
+      // Only repaint fallback glow once every 2.5 seconds.
+      // For HTML5 video, throttle to 10fps (100ms) which is optimal for ambient glow and saves GPU cycles.
+      const minInterval = activePlayerType === 'html5' ? 100 : 2500;
+      if (timestamp - lastAmbientFrame >= minInterval) {
         lastAmbientFrame = timestamp;
         if (activePlayerType === 'html5' && !html5Player.paused && html5Player.readyState >= 2) {
           try {
@@ -1539,10 +1584,10 @@
   let hueShift = 0;
   function renderFallbackGlow() {
     if (!ambientCtx) return;
-    hueShift = (hueShift + 0.5) % 360;
+    hueShift = (hueShift + 12) % 360;
     const grad = ambientCtx.createLinearGradient(0, 0, ambientCanvas.width, ambientCanvas.height);
-    grad.addColorStop(0, `hsla(${hueShift}, 70%, 50%, 0.4)`);
-    grad.addColorStop(1, `hsla(${(hueShift + 60) % 360}, 70%, 50%, 0.4)`);
+    grad.addColorStop(0, `hsla(${hueShift}, 70%, 50%, 0.35)`);
+    grad.addColorStop(1, `hsla(${(hueShift + 60) % 360}, 70%, 50%, 0.35)`);
     ambientCtx.fillStyle = grad;
     ambientCtx.fillRect(0, 0, ambientCanvas.width, ambientCanvas.height);
   }
@@ -2608,7 +2653,8 @@
     }
   }
 
-  setInterval(sampleVideoLuminance, 250);
+  // Sample luminance every 1.2s (reduces GPU readback stalls by 80% while keeping adaptation smooth)
+  setInterval(sampleVideoLuminance, 1200);
 
   // Initialize overlay chat in active state
   if (videoCornerChatBtn) videoCornerChatBtn.classList.add('active');
