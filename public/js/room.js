@@ -138,8 +138,15 @@
         osc.frequency.setValueAtTime(659.25, now + 0.18);
         gain.gain.setValueAtTime(0.05, now);
         gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+      } else if (type === 'mention') {
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(523.25, now); // C5
+        osc.frequency.setValueAtTime(659.25, now + 0.08); // E5
+        osc.frequency.setValueAtTime(783.99, now + 0.16); // G5
+        gain.gain.setValueAtTime(0.08, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.28);
         osc.start(now);
-        osc.stop(now + 0.35);
+        osc.stop(now + 0.28);
       }
     } catch (e) {
       // Audio autoplay restriction fallback
@@ -326,6 +333,12 @@
     socket.on('new-message', (msg) => {
       appendChatMessage(msg);
       playUiTone('chat');
+    });
+
+    socket.on('user-typing', ({ socketId, username, avatar, isTyping }) => {
+      if (typeof handleUserTypingEvent === 'function') {
+        handleUserTypingEvent({ socketId, username, avatar, isTyping });
+      }
     });
 
     socket.on('floating-reaction', (data) => {
@@ -798,29 +811,35 @@
   // Custom Controls Timeline & Event Bindings
   if (playPauseBtn) playPauseBtn.addEventListener('click', togglePlayPause);
 
-  // Controls Auto-Hide & Cursor Management (YouTube / Netflix style: controls never block subtitles)
+  // Controls Auto-Hide & Cursor Management (Controls always show on hover or pause)
   let controlsHideTimer = null;
   let isSubtitleMenuOpen = false;
   let isScrubbingTimeline = false;
 
-  function showControls(durationMs = 2800) {
+  function showControls(durationMs = 3200) {
     if (!playerWrapper) return;
     playerWrapper.classList.add('show-controls');
-    playerWrapper.classList.remove('hide-cursor');
+    playerWrapper.classList.remove('hide-cursor', 'hide-controls-idle');
     clearTimeout(controlsHideTimer);
 
     // If video is paused, keep controls visible so user can adjust things
     const isPaused = activePlayerType === 'html5' ? html5Player.paused : (ytPlayer && typeof ytPlayer.getPlayerState === 'function' && ytPlayer.getPlayerState() !== 1);
-    if (isPaused) return;
+    if (isPaused) {
+      playerWrapper.classList.add('is-paused');
+      return;
+    }
+    playerWrapper.classList.remove('is-paused');
 
     controlsHideTimer = setTimeout(() => {
-      // Don't auto-hide if paused, if subtitle menu is open, or if scrubbing timeline
       if (isSubtitleMenuOpen || isScrubbingTimeline) return;
       const currentlyPaused = activePlayerType === 'html5' ? html5Player.paused : false;
-      if (currentlyPaused) return;
+      if (currentlyPaused) {
+        playerWrapper.classList.add('is-paused');
+        return;
+      }
 
       playerWrapper.classList.remove('show-controls');
-      playerWrapper.classList.add('hide-cursor');
+      playerWrapper.classList.add('hide-cursor', 'hide-controls-idle');
     }, durationMs);
   }
 
@@ -828,16 +847,26 @@
     if (!playerWrapper) return;
     if (isSubtitleMenuOpen || isScrubbingTimeline) return;
     const isPaused = activePlayerType === 'html5' ? html5Player.paused : false;
-    if (isPaused) return;
+    if (isPaused) {
+      playerWrapper.classList.add('is-paused');
+      return;
+    }
 
     playerWrapper.classList.remove('show-controls');
-    playerWrapper.classList.add('hide-cursor');
+    playerWrapper.classList.add('hide-cursor', 'hide-controls-idle');
   }
 
   if (playerWrapper) {
-    // Mouse movement inside player shows controls and starts hide timer
+    // Show controls initially
+    showControls(4000);
+
+    // Mouse movement or hover inside player shows controls instantly
+    playerWrapper.addEventListener('mouseenter', () => {
+      showControls(3200);
+    });
+
     playerWrapper.addEventListener('mousemove', () => {
-      showControls(2600);
+      showControls(3200);
     });
 
     // Mouse leaving player hides controls after a short delay
@@ -845,7 +874,7 @@
       clearTimeout(controlsHideTimer);
       controlsHideTimer = setTimeout(() => {
         hideControlsNow();
-      }, 400);
+      }, 500);
     });
 
     // Touch support for mobile
@@ -1974,6 +2003,201 @@
     });
   }
 
+  // -------------------------------------------------------------
+  // WhatsApp-style "Who is writing" (Typing Indicator) & @ Mentions
+  // -------------------------------------------------------------
+  const chatTypingBar = document.getElementById('chat-typing-bar');
+  const typingAvatar = document.getElementById('typing-avatar');
+  const typingText = document.getElementById('typing-text');
+  const mentionMenu = document.getElementById('mention-autocomplete-menu');
+  const mentionList = document.getElementById('mention-list');
+
+  const typingUsers = new Map(); // socketId -> { username, avatar }
+  let stopTypingTimer = null;
+  let isCurrentlyTyping = false;
+  let activeMentionMatch = null;
+  let mentionSelectedIndex = 0;
+
+  function handleUserTypingEvent({ socketId, username, avatar, isTyping }) {
+    if (!chatTypingBar || !typingText) return;
+    if (isTyping) {
+      typingUsers.set(socketId, { username, avatar });
+    } else {
+      typingUsers.delete(socketId);
+    }
+
+    if (typingUsers.size === 0) {
+      chatTypingBar.style.display = 'none';
+      return;
+    }
+
+    const users = Array.from(typingUsers.values());
+    if (users.length === 1) {
+      if (typingAvatar) typingAvatar.innerHTML = renderAvatar(users[0].avatar);
+      typingText.textContent = `${users[0].username} is writing...`;
+    } else if (users.length === 2) {
+      if (typingAvatar) typingAvatar.innerHTML = '💬';
+      typingText.textContent = `${users[0].username} and ${users[1].username} are writing...`;
+    } else {
+      if (typingAvatar) typingAvatar.innerHTML = '💬';
+      typingText.textContent = `${users.length} members are writing...`;
+    }
+
+    chatTypingBar.style.display = 'block';
+    scrollChatToBottom();
+  }
+
+  // Detect typing & @ mention trigger in chat input
+  if (chatInput) {
+    chatInput.addEventListener('input', () => {
+      const val = chatInput.value;
+      if (val.trim().length > 0) {
+        if (!isCurrentlyTyping && socket && socket.connected) {
+          isCurrentlyTyping = true;
+          socket.emit('typing-start');
+        }
+        clearTimeout(stopTypingTimer);
+        stopTypingTimer = setTimeout(() => {
+          if (isCurrentlyTyping && socket && socket.connected) {
+            isCurrentlyTyping = false;
+            socket.emit('typing-stop');
+          }
+        }, 2200);
+      } else {
+        if (isCurrentlyTyping && socket && socket.connected) {
+          isCurrentlyTyping = false;
+          socket.emit('typing-stop');
+        }
+      }
+
+      handleMentionAutocomplete();
+    });
+
+    chatInput.addEventListener('blur', () => {
+      setTimeout(() => {
+        closeMentionMenu();
+      }, 250);
+    });
+
+    chatInput.addEventListener('keydown', (e) => {
+      if (mentionMenu && mentionMenu.style.display === 'block') {
+        const items = mentionList.querySelectorAll('.mention-item');
+        if (items.length > 0) {
+          if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            mentionSelectedIndex = (mentionSelectedIndex + 1) % items.length;
+            items.forEach((it, i) => it.classList.toggle('active', i === mentionSelectedIndex));
+            items[mentionSelectedIndex]?.scrollIntoView({ block: 'nearest' });
+            return;
+          } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            mentionSelectedIndex = (mentionSelectedIndex - 1 + items.length) % items.length;
+            items.forEach((it, i) => it.classList.toggle('active', i === mentionSelectedIndex));
+            items[mentionSelectedIndex]?.scrollIntoView({ block: 'nearest' });
+            return;
+          } else if (e.key === 'Enter' || e.key === 'Tab') {
+            if (items[mentionSelectedIndex]) {
+              e.preventDefault();
+              items[mentionSelectedIndex].click();
+              return;
+            }
+          } else if (e.key === 'Escape') {
+            e.preventDefault();
+            closeMentionMenu();
+            return;
+          }
+        }
+      }
+    });
+  }
+
+  function handleMentionAutocomplete() {
+    if (!mentionMenu || !mentionList || !chatInput) return;
+    const text = chatInput.value;
+    const cursorPos = chatInput.selectionStart;
+    const beforeCursor = text.substring(0, cursorPos);
+    const match = beforeCursor.match(/@([a-zA-Z0-9_\u00C0-\u017F]*)$/);
+
+    if (!match) {
+      closeMentionMenu();
+      return;
+    }
+
+    const query = match[1].toLowerCase();
+    activeMentionMatch = {
+      startPos: match.index,
+      endPos: cursorPos
+    };
+
+    const suggestions = [];
+
+    // Add @everyone / @all if matching
+    if (!query || 'everyone'.startsWith(query) || 'all'.startsWith(query)) {
+      suggestions.push({
+        username: 'everyone',
+        avatar: '📢',
+        badge: 'All'
+      });
+    }
+
+    const users = (roomState && roomState.users) ? roomState.users : [];
+    users.forEach(u => {
+      if (!query || u.username.toLowerCase().includes(query)) {
+        suggestions.push({
+          username: u.username,
+          avatar: u.avatar,
+          badge: u.isHost ? 'Host' : ''
+        });
+      }
+    });
+
+    if (suggestions.length === 0) {
+      closeMentionMenu();
+      return;
+    }
+
+    mentionList.innerHTML = '';
+    mentionSelectedIndex = 0;
+
+    suggestions.forEach((item, index) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = `mention-item ${index === 0 ? 'active' : ''}`;
+      btn.innerHTML = `
+        <span class="mention-item-avatar">${renderAvatar(item.avatar)}</span>
+        <span class="mention-item-name">@${escapeHtml(item.username)}</span>
+        ${item.badge ? `<span class="mention-item-badge">${item.badge}</span>` : ''}
+      `;
+
+      btn.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        insertMention(item.username);
+      });
+
+      mentionList.appendChild(btn);
+    });
+
+    mentionMenu.style.display = 'block';
+  }
+
+  function insertMention(username) {
+    if (!activeMentionMatch || !chatInput) return;
+    const text = chatInput.value;
+    const before = text.substring(0, activeMentionMatch.startPos);
+    const after = text.substring(activeMentionMatch.endPos);
+    const mentionTag = `@${username} `;
+    chatInput.value = before + mentionTag + after;
+    const nextCursor = before.length + mentionTag.length;
+    chatInput.focus();
+    chatInput.setSelectionRange(nextCursor, nextCursor);
+    closeMentionMenu();
+  }
+
+  function closeMentionMenu() {
+    if (mentionMenu) mentionMenu.style.display = 'none';
+    activeMentionMatch = null;
+  }
+
   if (chatForm) {
     chatForm.addEventListener('submit', (e) => {
       e.preventDefault();
@@ -1986,6 +2210,13 @@
       }
       const videoTime = Math.floor(getCurrentPlaybackTime());
       socket.emit('send-message', { text, videoTime });
+
+      if (isCurrentlyTyping && socket && socket.connected) {
+        isCurrentlyTyping = false;
+        socket.emit('typing-stop');
+      }
+      closeMentionMenu();
+
       chatInput.value = '';
       chatInput.focus();
     });
@@ -2000,8 +2231,10 @@
 
   function formatChatMessageWithTimestamps(rawText) {
     if (!rawText) return '';
-    const escaped = escapeHtml(rawText);
-    return escaped.replace(/(\[?(?:\b\d{1,2}:)?\d{1,2}:\d{2}\b\]?)/g, (match) => {
+    let escaped = escapeHtml(rawText);
+
+    // Clickable timestamp badges [01:23] or 01:23
+    escaped = escaped.replace(/(\[?(?:\b\d{1,2}:)?\d{1,2}:\d{2}\b\]?)/g, (match) => {
       const clean = match.replace(/[\[\]]/g, '');
       const parts = clean.split(':').map(Number);
       let sec = 0;
@@ -2014,6 +2247,16 @@
       }
       return `<button type="button" class="chat-video-ts-badge inline-ts" data-seek-time="${sec}" title="Click to jump to ${clean} in video"><span class="ts-icon">▶</span> ${clean}</button>`;
     });
+
+    // WhatsApp-style @ Mentions
+    const myName = currentUser?.username ? currentUser.username.toLowerCase() : '';
+    escaped = escaped.replace(/@([a-zA-Z0-9_\u00C0-\u017F]+)/g, (match, username) => {
+      const lower = username.toLowerCase();
+      const isMe = myName && (lower === myName || lower === 'everyone' || lower === 'all');
+      return `<span class="chat-mention ${isMe ? 'mention-me' : ''}">@${username}</span>`;
+    });
+
+    return escaped;
   }
 
   function jumpToTimestamp(target) {
@@ -2043,6 +2286,18 @@
       const msgEl = document.createElement('div');
       msgEl.className = 'chat-message';
       const isYou = currentUser && msg.user && msg.user.socketId === currentUser.socketId;
+
+      const myName = currentUser?.username ? currentUser.username.toLowerCase() : '';
+      const hasMentionMe = myName && msg.text && (
+        msg.text.toLowerCase().includes(`@${myName}`) ||
+        msg.text.toLowerCase().includes('@everyone') ||
+        msg.text.toLowerCase().includes('@all')
+      );
+
+      if (hasMentionMe && !isYou) {
+        msgEl.classList.add('has-mention-me');
+        playUiTone('mention');
+      }
 
       const hasVideoTime = typeof msg.videoTime === 'number' && msg.videoTime >= 0;
       const tsHtml = hasVideoTime ? `

@@ -386,12 +386,33 @@
             <!-- Messages rendered dynamically -->
           </div>
 
+          <!-- WhatsApp-style Typing Indicator ("who is writing") -->
+          <div class="chat-typing-bar" id="chat-typing-bar" style="display: none;">
+            <div class="typing-bubble">
+              <span class="typing-avatar" id="typing-avatar">🍿</span>
+              <div class="typing-dots">
+                <span class="dot"></span>
+                <span class="dot"></span>
+                <span class="dot"></span>
+              </div>
+              <span class="typing-text" id="typing-text">Someone is writing...</span>
+            </div>
+          </div>
+
+          <!-- WhatsApp-style @ Mention Popup Menu -->
+          <div class="mention-autocomplete-menu" id="mention-autocomplete-menu" style="display: none;">
+            <div class="mention-menu-header">Mention Member</div>
+            <div class="mention-list" id="mention-list">
+              <!-- Dynamically populated room members -->
+            </div>
+          </div>
+
           <form id="chat-send-form" class="chat-input-bar">
             <button type="button" class="chat-stamp-btn" id="btn-stamp-time" title="Click to stamp video time into message">
               <span id="chat-current-ts-pill">⏱️ 00:00</span>
             </button>
-            <input type="text" id="chat-text-input" class="input-field" placeholder="Message with video timestamp..." maxlength="500" autocomplete="off" required>
-            <button type="submit" class="btn btn-primary btn-icon" title="Send (Enter)">
+            <input type="text" id="chat-text-input" class="input-field" placeholder="Message or @mention with timestamp..." maxlength="500" autocomplete="off" required>
+            <button type="submit" class="btn btn-primary btn-icon" id="chat-send-btn" title="Send (Enter)">
               <span>➤</span>
             </button>
           </form>

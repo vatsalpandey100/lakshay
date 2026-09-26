@@ -571,7 +571,7 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Chat message with video timestamp
+  // Chat message with video timestamp & @ mentions
   socket.on('send-message', ({ text, videoTime }) => {
     if (!currentRoomId || !rooms.has(currentRoomId) || !text?.trim()) return;
     const room = rooms.get(currentRoomId);
@@ -587,10 +587,16 @@ io.on('connection', (socket) => {
       isHost: room.hostId === socket.id
     };
 
+    const trimmedText = text.trim().substring(0, 500);
+    // Parse @ mentions (e.g. @Lakshay, @everyone, @all)
+    const rawMentions = trimmedText.match(/@([a-zA-Z0-9_\u00C0-\u017F]+)/g) || [];
+    const mentions = rawMentions.map(m => m.substring(1));
+
     const message = {
       id: `msg-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
       user: sender,
-      text: text.trim().substring(0, 500),
+      text: trimmedText,
+      mentions,
       timestamp: Date.now(),
       videoTime: accurateVideoTime,
       system: false
@@ -600,6 +606,34 @@ io.on('connection', (socket) => {
     if (room.messages.length > 100) room.messages.shift();
 
     io.to(currentRoomId).emit('new-message', message);
+
+    // Stop typing indicator on message send
+    socket.to(currentRoomId).emit('user-typing', {
+      socketId: socket.id,
+      isTyping: false
+    });
+  });
+
+  // WhatsApp-style "Who is writing" (Typing status)
+  socket.on('typing-start', () => {
+    if (!currentRoomId || !rooms.has(currentRoomId)) return;
+    const room = rooms.get(currentRoomId);
+    const user = currentUser || room.users.get(socket.id);
+    if (!user) return;
+    socket.to(currentRoomId).emit('user-typing', {
+      socketId: socket.id,
+      username: user.username,
+      avatar: user.avatar,
+      isTyping: true
+    });
+  });
+
+  socket.on('typing-stop', () => {
+    if (!currentRoomId || !rooms.has(currentRoomId)) return;
+    socket.to(currentRoomId).emit('user-typing', {
+      socketId: socket.id,
+      isTyping: false
+    });
   });
 
   // Floating Reaction
@@ -676,6 +710,11 @@ io.on('connection', (socket) => {
       const room = rooms.get(currentRoomId);
       const user = room.users.get(socket.id);
       room.users.delete(socket.id);
+
+      socket.to(currentRoomId).emit('user-typing', {
+        socketId: socket.id,
+        isTyping: false
+      });
 
       if (user) {
         const leaveMsg = {
