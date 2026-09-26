@@ -41,6 +41,7 @@
   const muteIcon = document.getElementById('mute-icon');
   const rateSelect = document.getElementById('ctrl-playback-rate');
   const fullscreenBtn = document.getElementById('ctrl-fullscreen-btn');
+  const mobileTopFullscreenBtn = document.getElementById('mobile-top-fullscreen-btn');
   const syncBeaconBtn = document.getElementById('sync-beacon-btn');
   const syncStatusText = document.getElementById('sync-status-text');
   const activeVideoTitle = document.getElementById('active-video-title');
@@ -966,6 +967,7 @@
       lastTouchInteractionTime = Date.now();
       if (
         e.target.closest('#custom-controls') || 
+        e.target.closest('#mobile-top-fullscreen-btn') ||
         e.target.closest('.floating-reaction-item') || 
         e.target.closest('#video-floating-chat-overlay') || 
         e.target.closest('#video-corner-chat-btn') ||
@@ -999,6 +1001,7 @@
       lastTouchInteractionTime = Date.now();
       if (
         e.target.closest('#custom-controls') || 
+        e.target.closest('#mobile-top-fullscreen-btn') ||
         e.target.closest('.floating-reaction-item') || 
         e.target.closest('#video-floating-chat-overlay') || 
         e.target.closest('#video-corner-chat-btn') ||
@@ -1043,6 +1046,7 @@
       if (Date.now() - lastTouchInteractionTime < 1200) return;
       if (
         e.target.closest('#custom-controls') || 
+        e.target.closest('#mobile-top-fullscreen-btn') ||
         e.target.closest('.floating-reaction-item') || 
         e.target.closest('#subtitle-menu') ||
         e.target.closest('#video-floating-chat-overlay') ||
@@ -1291,6 +1295,12 @@
   // Fullscreen & Mobile Viewport Maximization
   if (fullscreenBtn) {
     fullscreenBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleFullscreen();
+    });
+  }
+  if (mobileTopFullscreenBtn) {
+    mobileTopFullscreenBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       toggleFullscreen();
     });
@@ -2644,6 +2654,16 @@
         exitIcon.style.display = isFull ? 'block' : 'none';
       }
       fullscreenBtn.title = isFull ? 'Exit Fullscreen' : 'Fullscreen (F)';
+    }
+
+    if (mobileTopFullscreenBtn) {
+      const enterIcon = mobileTopFullscreenBtn.querySelector('.fs-icon-enter');
+      const exitIcon = mobileTopFullscreenBtn.querySelector('.fs-icon-exit');
+      if (enterIcon && exitIcon) {
+        enterIcon.style.display = isFull ? 'none' : 'block';
+        exitIcon.style.display = isFull ? 'block' : 'none';
+      }
+      mobileTopFullscreenBtn.title = isFull ? 'Exit Fullscreen' : 'Fullscreen (F)';
     }
 
     if (floatingChatOverlay) {
