@@ -2508,26 +2508,40 @@
       showControls(3000);
       syncRecentOverlayMessages();
     } else {
-      // Clean up floating chat form on exiting fullscreen
+      // Clean up floating chat form and stream on exiting fullscreen
       if (floatingQuickChatForm) {
         floatingQuickChatForm.style.display = 'none';
+      }
+      if (floatingChatStream) {
+        floatingChatStream.innerHTML = '';
       }
     }
   });
 
-  // Populate recent messages into overlay stream when entering fullscreen
+  // Populate recent messages into overlay stream when entering fullscreen (strictly last 45s)
   function syncRecentOverlayMessages() {
     if (!floatingChatStream) return;
-    if (floatingChatStream.children.length === 0 && roomState && Array.isArray(roomState.messages)) {
-      const recent = roomState.messages.slice(-15);
-      recent.forEach(m => {
-        if (!m.system) appendFloatingOverlayMessage(m, true);
+    floatingChatStream.innerHTML = '';
+    const now = Date.now();
+    if (roomState && Array.isArray(roomState.messages)) {
+      // ONLY messages sent within the last 45 seconds (45,000 ms)
+      const recent45s = roomState.messages.filter(m => {
+        if (m.system || !m.text) return false;
+        const msgTime = m.timestamp || now;
+        return (now - msgTime) < 45000;
+      });
+
+      recent45s.forEach(m => {
+        const elapsed = now - (m.timestamp || now);
+        const remainingTtl = Math.max(1500, 45000 - elapsed);
+        appendFloatingOverlayMessage(m, true, remainingTtl);
       });
     }
   }
 
   // Append a transparent floating message directly over the video (ONLY in fullscreen / maximized mode)
-  function appendFloatingOverlayMessage(msg, force = false) {
+  // Message automatically fades out and disappears after 45 seconds
+  function appendFloatingOverlayMessage(msg, force = false, ttlMs = 45000) {
     if (!floatingChatStream) return;
     
     // In normal mode, messages are strictly displayed in the sidebar chat list — NOT on the video!
@@ -2555,9 +2569,24 @@
 
     floatingChatStream.appendChild(row);
 
-    // Keep up to 30 messages in the stream so users can scroll up and review
-    while (floatingChatStream.children.length > 30) {
-      floatingChatStream.removeChild(floatingChatStream.firstChild);
+    // Auto-fade and remove from video after 45 seconds (or remaining lifespan)
+    const fadeTimer = setTimeout(() => {
+      row.classList.add('fading-out');
+      setTimeout(() => {
+        if (row.parentNode) {
+          row.parentNode.removeChild(row);
+        }
+      }, 420);
+    }, Math.max(1000, ttlMs));
+
+    // Store timer on element in case of early cleanup
+    row._fadeTimer = fadeTimer;
+
+    // Keep up to 25 messages in the stream so users can see active conversation
+    while (floatingChatStream.children.length > 25) {
+      const first = floatingChatStream.firstChild;
+      if (first._fadeTimer) clearTimeout(first._fadeTimer);
+      floatingChatStream.removeChild(first);
     }
 
     // Auto-scroll to keep newest message visible unless user scrolled upward
