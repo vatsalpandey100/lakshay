@@ -1531,14 +1531,24 @@
     } else if (e.code === 'KeyC') {
       ctrlCcBtn?.click();
     } else if (e.code === 'KeyT' || e.code === 'KeyV') {
-      // T/V toggles overlay chat visibility
-      setOverlayChatEnabled(!isOverlayChatEnabled);
+      // T/V toggles overlay chat visibility ONLY in fullscreen / maximized mode
+      if (typeof isPlayerMaximizedOrFullscreen === 'function' && isPlayerMaximizedOrFullscreen()) {
+        setOverlayChatEnabled(!isOverlayChatEnabled);
+      }
     } else if (e.code === 'Enter') {
-      // Enter opens the quick chat input to type
-      if (isOverlayChatEnabled && floatingQuickChatForm && floatingQuickChatInput) {
-        e.preventDefault();
-        floatingQuickChatForm.style.display = 'flex';
-        floatingQuickChatInput.focus();
+      // In fullscreen/maximized: Enter opens quick floating chat input
+      if (typeof isPlayerMaximizedOrFullscreen === 'function' && isPlayerMaximizedOrFullscreen()) {
+        if (isOverlayChatEnabled && floatingQuickChatForm && floatingQuickChatInput) {
+          e.preventDefault();
+          floatingQuickChatForm.style.display = 'flex';
+          floatingQuickChatInput.focus();
+        }
+      } else {
+        // In normal mode: Enter focuses main sidebar chat input
+        const mainChatInput = document.getElementById('chat-input');
+        if (mainChatInput && document.activeElement !== mainChatInput) {
+          mainChatInput.focus();
+        }
       }
     }
   });
@@ -2452,10 +2462,18 @@
 
   let isOverlayChatEnabled = true;
 
+  // Helper: Detect if video player is currently in fullscreen or maximized mode
+  function isPlayerMaximizedOrFullscreen() {
+    return !!(document.fullscreenElement ||
+      playerWrapper?.classList.contains('is-fullscreen') ||
+      playerWrapper?.classList.contains('is-maximized'));
+  }
+
   function setOverlayChatEnabled(enabled) {
     isOverlayChatEnabled = enabled;
+    const isMax = isPlayerMaximizedOrFullscreen();
     if (floatingChatOverlay) {
-      floatingChatOverlay.style.display = enabled ? 'flex' : 'none';
+      floatingChatOverlay.style.display = (enabled && isMax) ? 'flex' : 'none';
     }
     if (videoCornerChatBtn) {
       videoCornerChatBtn.classList.toggle('active', enabled);
@@ -2466,7 +2484,9 @@
     if (enabled && cornerChatDot) {
       cornerChatDot.style.display = 'none';
     }
-    showToast(enabled ? '💬 On-Video Chat Enabled' : '🔇 On-Video Chat Hidden');
+    if (isMax) {
+      showToast(enabled ? '💬 On-Video Chat Enabled' : '🔇 On-Video Chat Hidden');
+    }
   }
 
   // Corner chat button: opens quick chat input to type; if hidden, shows it first
@@ -2502,14 +2522,49 @@
       const icon = fullscreenBtn.querySelector('#fullscreen-icon') || fullscreenBtn;
       icon.textContent = isFull ? '🗗' : '⛶';
     }
+
+    // On-video floating messages & corner chat button are ONLY for fullscreen / maximized mode!
+    if (floatingChatOverlay) {
+      floatingChatOverlay.style.display = (isFull && isOverlayChatEnabled) ? 'flex' : 'none';
+    }
+    if (videoCornerChatBtn) {
+      videoCornerChatBtn.style.display = isFull ? 'flex' : 'none';
+    }
+    if (ctrlOverlayChatBtn) {
+      ctrlOverlayChatBtn.style.display = isFull ? 'inline-flex' : 'none';
+    }
+
     if (isFull) {
       showControls(3000);
+      syncRecentOverlayMessages();
+    } else {
+      // Clean up floating chat form on exiting fullscreen
+      if (floatingQuickChatForm) {
+        floatingQuickChatForm.style.display = 'none';
+      }
     }
   });
 
-  // Append a transparent floating message directly over the video
-  function appendFloatingOverlayMessage(msg) {
+  // Populate recent messages into overlay stream when entering fullscreen
+  function syncRecentOverlayMessages() {
     if (!floatingChatStream) return;
+    if (floatingChatStream.children.length === 0 && roomState && Array.isArray(roomState.messages)) {
+      const recent = roomState.messages.slice(-15);
+      recent.forEach(m => {
+        if (!m.system) appendFloatingOverlayMessage(m, true);
+      });
+    }
+  }
+
+  // Append a transparent floating message directly over the video (ONLY in fullscreen / maximized mode)
+  function appendFloatingOverlayMessage(msg, force = false) {
+    if (!floatingChatStream) return;
+    
+    // In normal mode, messages are strictly displayed in the sidebar chat list — NOT on the video!
+    if (!force && !isPlayerMaximizedOrFullscreen()) {
+      return;
+    }
+
     if (!isOverlayChatEnabled) {
       if (cornerChatDot) cornerChatDot.style.display = 'block';
       return;
@@ -2656,12 +2711,18 @@
   // Sample luminance every 1.2s (reduces GPU readback stalls by 80% while keeping adaptation smooth)
   setInterval(sampleVideoLuminance, 1200);
 
-  // Initialize overlay chat in active state
-  if (videoCornerChatBtn) videoCornerChatBtn.classList.add('active');
-  if (ctrlOverlayChatBtn) ctrlOverlayChatBtn.classList.add('overlay-chat-active');
+  // Initialize overlay chat (hidden by default in normal mode, ONLY active in fullscreen/maximized)
+  if (videoCornerChatBtn) {
+    videoCornerChatBtn.classList.add('active');
+    videoCornerChatBtn.style.display = 'none';
+  }
+  if (ctrlOverlayChatBtn) {
+    ctrlOverlayChatBtn.classList.add('overlay-chat-active');
+    ctrlOverlayChatBtn.style.display = 'none';
+  }
   if (floatingChatOverlay) {
     floatingChatOverlay.classList.add('lum-dark-scene');
-    floatingChatOverlay.style.display = 'flex';
+    floatingChatOverlay.style.display = 'none';
   }
 
   // Queue Rendering

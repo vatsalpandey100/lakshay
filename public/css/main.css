@@ -1029,7 +1029,7 @@ video::cue {
 }
 
 /* ==========================================================================
-   Floating Transparent On-Video Chat Overlay (Fullscreen / Maximized)
+   Floating Transparent On-Video Chat Overlay (Fullscreen / Maximized ONLY)
    ========================================================================== */
 .video-floating-chat-overlay {
   position: absolute;
@@ -1038,7 +1038,8 @@ video::cue {
   max-width: min(390px, 44vw);
   pointer-events: none;
   z-index: 22;
-  display: flex;
+  /* Hidden in normal/windowed mode — ONLY active when fullscreen or maximized */
+  display: none !important;
   flex-direction: column;
   align-items: flex-end;
   gap: 4px;
@@ -1049,6 +1050,14 @@ video::cue {
   -webkit-backdrop-filter: none !important;
   box-shadow: none !important;
   border: none !important;
+}
+
+/* ONLY display on-video floating chat overlay in Fullscreen or Maximized mode */
+.video-player-wrapper:fullscreen .video-floating-chat-overlay,
+.video-player-wrapper:-webkit-full-screen .video-floating-chat-overlay,
+.video-player-wrapper.is-fullscreen .video-floating-chat-overlay,
+.video-player-wrapper.is-maximized .video-floating-chat-overlay {
+  display: flex !important;
 }
 
 /* Smart lift: When controls are shown (hovering bottom 1/10th), elevate chat overlay smoothly */
@@ -1292,7 +1301,8 @@ video::cue {
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
   color: #ffffff;
-  display: flex;
+  /* Hidden in normal mode — ONLY visible when fullscreen or maximized */
+  display: none !important;
   align-items: center;
   justify-content: center;
   font-size: 1rem;
@@ -1300,23 +1310,37 @@ video::cue {
   z-index: 24;
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
   transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-  /* Always visible — opacity controlled by state */
   opacity: 0.7;
   pointer-events: auto;
 }
 
-/* Always accessible regardless of hover/fullscreen state */
-.video-player-wrapper .video-corner-chat-btn {
-  opacity: 0.7;
-  pointer-events: auto;
+/* Control bar chat button: hidden in normal mode (sidebar has chat), only in fullscreen */
+#ctrl-overlay-chat-btn {
+  display: none !important;
 }
 
-/* Slightly brighter on hover or when controls are active */
+/* ONLY display corner chat button & control bar chat button in Fullscreen or Maximized mode */
+.video-player-wrapper:fullscreen .video-corner-chat-btn,
+.video-player-wrapper:-webkit-full-screen .video-corner-chat-btn,
+.video-player-wrapper.is-fullscreen .video-corner-chat-btn,
+.video-player-wrapper.is-maximized .video-corner-chat-btn {
+  display: flex !important;
+}
+
+.video-player-wrapper:fullscreen #ctrl-overlay-chat-btn,
+.video-player-wrapper:-webkit-full-screen #ctrl-overlay-chat-btn,
+.video-player-wrapper.is-fullscreen #ctrl-overlay-chat-btn,
+.video-player-wrapper.is-maximized #ctrl-overlay-chat-btn {
+  display: inline-flex !important;
+}
+
+/* Slightly brighter on hover or when controls are active in fullscreen */
 .video-player-wrapper:hover .video-corner-chat-btn,
 .video-player-wrapper.show-controls .video-corner-chat-btn,
 .video-player-wrapper:fullscreen .video-corner-chat-btn,
 .video-player-wrapper:-webkit-full-screen .video-corner-chat-btn,
-.video-player-wrapper.is-fullscreen .video-corner-chat-btn {
+.video-player-wrapper.is-fullscreen .video-corner-chat-btn,
+.video-player-wrapper.is-maximized .video-corner-chat-btn {
   opacity: 0.88;
 }
 
