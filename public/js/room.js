@@ -876,7 +876,7 @@
 
   let cursorHideTimer = null;
 
-  function showControls(durationMs = 3500) {
+  function showControls(durationMs = 3200) {
     if (!playerWrapper) return;
     playerWrapper.classList.add('show-controls');
     playerWrapper.classList.remove('hide-cursor', 'hide-controls-idle');
@@ -884,7 +884,6 @@
 
     controlsHideTimer = setTimeout(() => {
       if (isSubtitleMenuOpen || isScrubbingTimeline) return;
-      if (html5Player && html5Player.paused) return; // Keep visible while paused
       playerWrapper.classList.remove('show-controls');
       playerWrapper.classList.add('hide-controls-idle');
     }, durationMs);
@@ -893,7 +892,6 @@
   function hideControlsOnly() {
     if (!playerWrapper) return;
     if (isSubtitleMenuOpen || isScrubbingTimeline) return;
-    if (html5Player && html5Player.paused) return; // Keep visible while paused
     playerWrapper.classList.remove('show-controls', 'is-paused');
     playerWrapper.classList.add('hide-controls-idle');
   }
@@ -901,7 +899,6 @@
   function hideControlsNow() {
     if (!playerWrapper) return;
     if (isSubtitleMenuOpen || isScrubbingTimeline) return;
-    if (html5Player && html5Player.paused) return;
     playerWrapper.classList.remove('show-controls', 'is-paused');
     playerWrapper.classList.add('hide-cursor', 'hide-controls-idle');
   }
@@ -925,8 +922,8 @@
   }
 
   if (playerWrapper) {
-    // Show controls initially briefly
-    showControls(3500);
+    // Start with controls hidden on desktop unless hovered
+    hideControlsNow();
 
     // Desktop Mouse movement (Ignored if triggered by mobile touch gesture)
     playerWrapper.addEventListener('mouseenter', (e) => {
@@ -1065,11 +1062,6 @@
   });
 
   html5Player.addEventListener('pause', () => {
-    if (playerWrapper) {
-      playerWrapper.classList.add('show-controls');
-      playerWrapper.classList.remove('hide-cursor');
-    }
-    clearTimeout(controlsHideTimer);
     if (isSyncingFromServer) return;
     updatePlayPauseIcon(true);
     emitPlaybackAction('pause', html5Player.currentTime);
