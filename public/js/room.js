@@ -1490,12 +1490,14 @@
     } else if (e.code === 'KeyC') {
       ctrlCcBtn?.click();
     } else if (e.code === 'KeyT' || e.code === 'KeyV') {
-      videoCornerChatBtn?.click();
-    } else if (e.code === 'Enter' && document.fullscreenElement) {
-      e.preventDefault();
-      if (floatingQuickChatForm) {
-        floatingQuickChatForm.style.display = 'block';
-        floatingQuickChatInput?.focus();
+      // T/V toggles overlay chat visibility
+      setOverlayChatEnabled(!isOverlayChatEnabled);
+    } else if (e.code === 'Enter') {
+      // Enter opens the quick chat input to type
+      if (isOverlayChatEnabled && floatingQuickChatForm && floatingQuickChatInput) {
+        e.preventDefault();
+        floatingQuickChatForm.style.display = 'flex';
+        floatingQuickChatInput.focus();
       }
     }
   });
@@ -2422,14 +2424,22 @@
     showToast(enabled ? '💬 On-Video Chat Enabled' : '🔇 On-Video Chat Hidden');
   }
 
-  // Toggle buttons
+  // Corner chat button: opens quick chat input to type; if hidden, shows it first
   if (videoCornerChatBtn) {
     videoCornerChatBtn.addEventListener('click', (e) => {
       e.stopPropagation();
-      setOverlayChatEnabled(!isOverlayChatEnabled);
+      if (!isOverlayChatEnabled) {
+        setOverlayChatEnabled(true);
+      } else {
+        if (floatingQuickChatForm && floatingQuickChatInput) {
+          floatingQuickChatForm.style.display = 'flex';
+          floatingQuickChatInput.focus();
+        }
+      }
     });
   }
 
+  // Controls bar chat button: toggles overlay visibility
   if (ctrlOverlayChatBtn) {
     ctrlOverlayChatBtn.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -2503,31 +2513,7 @@
     }
   }
 
-  function openFloatingQuickChat() {
-    if (!floatingQuickChatForm || !floatingQuickChatInput) return;
-    floatingQuickChatForm.style.display = 'block';
-    floatingQuickChatInput.focus();
-  }
-
-  // Keyboard shortcut: Press Enter or T to open chat input in fullscreen / player
-  document.addEventListener('keydown', (e) => {
-    const activeEl = document.activeElement;
-    if (activeEl && ['INPUT', 'TEXTAREA', 'SELECT'].includes(activeEl.tagName)) {
-      if (e.key === 'Escape' && activeEl === floatingQuickChatInput) {
-        floatingQuickChatForm.style.display = 'none';
-      }
-      return;
-    }
-
-    if (e.key === 'Enter' || e.code === 'KeyT') {
-      if (isOverlayChatEnabled) {
-        e.preventDefault();
-        openFloatingQuickChat();
-      }
-    }
-  });
-
-  // Fullscreen Quick Input Form
+  // Quick chat input form
   if (floatingQuickChatForm && floatingQuickChatInput) {
     floatingQuickChatForm.addEventListener('submit', (e) => {
       e.preventDefault();
@@ -2537,20 +2523,23 @@
       socket.emit('send-message', { text, videoTime });
       floatingQuickChatInput.value = '';
       floatingQuickChatForm.style.display = 'none';
-      if (chatInput) chatInput.value = '';
     });
 
     floatingQuickChatInput.addEventListener('keydown', (e) => {
+      e.stopPropagation(); // prevent T/Enter from triggering player shortcuts while typing
       if (e.key === 'Escape') {
         e.preventDefault();
         floatingQuickChatForm.style.display = 'none';
+        floatingQuickChatInput.blur();
       }
     });
 
     floatingQuickChatInput.addEventListener('blur', () => {
       setTimeout(() => {
-        floatingQuickChatForm.style.display = 'none';
-      }, 200);
+        if (document.activeElement !== floatingQuickChatInput) {
+          floatingQuickChatForm.style.display = 'none';
+        }
+      }, 180);
     });
   }
 

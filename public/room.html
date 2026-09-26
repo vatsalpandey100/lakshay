@@ -136,12 +136,13 @@
                 <!-- Pure floating messages directly over the video with NO background, NO box, NO blur layer -->
               </div>
               <form class="floating-quick-chat-form" id="floating-quick-chat-form" style="display: none;">
-                <input type="text" id="floating-quick-chat-input" class="floating-quick-chat-input" placeholder="Type message in fullscreen... (Enter to send)" maxlength="300" autocomplete="off">
+                <input type="text" id="floating-quick-chat-input" class="floating-quick-chat-input" placeholder="Message... (Enter to send, Esc to close)" maxlength="300" autocomplete="off">
+                <button type="submit" class="floating-chat-send-btn" aria-label="Send">↑</button>
               </form>
             </div>
 
             <!-- Compact Corner Chat Control (Bottom-Right of Video) -->
-            <button type="button" class="video-corner-chat-btn" id="video-corner-chat-btn" title="Toggle On-Video Messages (T)" aria-label="Toggle Overlay Messages">
+            <button type="button" class="video-corner-chat-btn" id="video-corner-chat-btn" title="Chat (click to type · T to toggle)" aria-label="Open Chat">
               <span id="corner-chat-icon" class="corner-chat-icon">💬</span>
               <span id="corner-chat-dot" class="corner-chat-dot" style="display: none;"></span>
             </button>
