@@ -580,9 +580,16 @@ io.on('connection', (socket) => {
       ? Math.max(0, Math.floor(videoTime))
       : Math.floor(getAccuratePlaybackTime(room.playback));
 
+    const sender = currentUser || room.users.get(socket.id) || {
+      socketId: socket.id,
+      username: 'Viewer',
+      avatar: '🍿',
+      isHost: room.hostId === socket.id
+    };
+
     const message = {
       id: `msg-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-      user: currentUser,
+      user: sender,
       text: text.trim().substring(0, 500),
       timestamp: Date.now(),
       videoTime: accurateVideoTime,

@@ -125,6 +125,11 @@
               <span id="player-stream-beacon-text">Streaming Anime to Remote Friend...</span>
             </div>
 
+            <!-- On-Screen Subtitle Display Container (Renders above controls with smart lifting) -->
+            <div class="custom-subtitles-container" id="custom-subtitles-container" style="display: none;">
+              <span class="custom-subtitle-text" id="custom-subtitle-text"></span>
+            </div>
+
             <!-- Custom Video Controls Overlay -->
             <div class="custom-controls-bar" id="custom-controls">
               <!-- Scrubber Timeline -->
@@ -166,6 +171,30 @@
                   <button type="button" class="btn btn-secondary btn-sm" id="btn-force-sync" style="padding: 0.3rem 0.6rem; font-size: 0.75rem;" title="Synchronize current time with host">
                     <span>⚡ Resync</span>
                   </button>
+
+                  <!-- Subtitles / Closed Captions Toggle & Menu -->
+                  <div class="subtitle-wrap" id="subtitle-wrap">
+                    <button type="button" class="ctrl-btn" id="ctrl-cc-btn" title="Subtitles & Tracks (C)">
+                      <span id="cc-icon" class="cc-badge">CC</span>
+                    </button>
+                    <div class="subtitle-menu" id="subtitle-menu" style="display: none;">
+                      <div class="subtitle-menu-header">
+                        <span>💬 Subtitles & Tracks</span>
+                        <button type="button" id="btn-close-sub-menu" class="sub-close-btn" title="Close">✕</button>
+                      </div>
+                      <div class="subtitle-tracks-list" id="subtitle-tracks-list">
+                        <button type="button" class="sub-track-opt active" data-track-id="off">Off</button>
+                      </div>
+                      <div class="subtitle-menu-divider"></div>
+                      <label class="sub-menu-action-btn" for="sub-file-input">
+                        <span>📂 Load Subtitle (.srt / .vtt)</span>
+                        <input type="file" id="sub-file-input" accept=".srt,.vtt,.ass,.ssa" style="display: none;">
+                      </label>
+                      <button type="button" class="sub-menu-action-btn" id="btn-toggle-native-controls">
+                        <span>🎛️ Toggle Native Controls</span>
+                      </button>
+                    </div>
+                  </div>
 
                   <select id="ctrl-playback-rate" class="input-field" style="width: auto; padding: 0.25rem 0.5rem; font-size: 0.75rem; height: 32px;" title="Playback Speed">
                     <option value="0.5">0.5x</option>
@@ -266,6 +295,9 @@
                   </button>
                   <button type="button" class="btn btn-secondary btn-sm" id="btn-queue-local-video" title="Upload anime video file to the upcoming queue">
                     <span>📋 + Queue Anime File</span>
+                  </button>
+                  <button type="button" class="btn btn-secondary btn-sm" id="btn-load-sub-media" title="Load subtitle file (.srt, .vtt) for currently playing anime">
+                    <span>💬 + Subtitles</span>
                   </button>
                 </div>
               </div>

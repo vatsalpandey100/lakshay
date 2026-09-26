@@ -174,19 +174,33 @@
 
   // Initialize Socket.io Connection
   function initSocket(username, avatar) {
-    socket = io();
+    socket = io({
+      reconnection: true,
+      reconnectionAttempts: Infinity,
+      reconnectionDelay: 1000
+    });
 
     const storedRoomName = sessionStorage.getItem('syncpulse_room_name');
     const isCreating = sessionStorage.getItem('syncpulse_is_creating') === 'true';
-    const hostToken = sessionStorage.getItem('syncpulse_host_token') || localStorage.getItem('lakshay_host_token_' + roomId);
 
-    socket.emit('join-room', {
-      roomId,
-      username,
-      avatar,
-      roomName: storedRoomName,
-      hostToken,
-      isCreating
+    function sendJoinRoom() {
+      const hostToken = sessionStorage.getItem('syncpulse_host_token') || localStorage.getItem('lakshay_host_token_' + roomId);
+      socket.emit('join-room', {
+        roomId,
+        username,
+        avatar,
+        roomName: storedRoomName,
+        hostToken,
+        isCreating
+      });
+    }
+
+    // Always emit join-room on initial connect and on every reconnect
+    if (socket.connected) {
+      sendJoinRoom();
+    }
+    socket.on('connect', () => {
+      sendJoinRoom();
     });
 
     socket.on('room-state', (data) => {
@@ -613,16 +627,26 @@
   }
 
   function getCurrentPlaybackTime() {
-    if (activePlayerType === 'html5') {
-      return html5Player.currentTime || 0;
+    if (activePlayerType === 'html5' && html5Player) {
+      const t = html5Player.currentTime;
+      if (typeof t === 'number' && !isNaN(t) && t > 0) return t;
     } else if (activePlayerType === 'youtube' && isYtReady && ytPlayer && ytPlayer.getCurrentTime) {
-      return ytPlayer.getCurrentTime() || 0;
+      const t = ytPlayer.getCurrentTime();
+      if (typeof t === 'number' && !isNaN(t) && t > 0) return t;
+    }
+    // Fallback to roomState calculated playback time so timestamp never freezes
+    if (roomState && roomState.playback) {
+      if (roomState.playback.state === 'playing') {
+        const elapsed = (Date.now() - roomState.playback.lastTimestamp) / 1000;
+        return Math.max(0, (roomState.playback.currentTime || 0) + elapsed * (roomState.playback.playbackRate || 1.0));
+      }
+      return roomState.playback.currentTime || 0;
     }
     return 0;
   }
 
   function getPlaybackDuration() {
-    if (activePlayerType === 'html5') {
+    if (activePlayerType === 'html5' && html5Player) {
       return html5Player.duration || 0;
     } else if (activePlayerType === 'youtube' && isYtReady && ytPlayer && ytPlayer.getDuration) {
       return ytPlayer.getDuration() || 0;
@@ -632,11 +656,13 @@
 
   function seekToTime(seconds) {
     const time = Math.max(0, seconds);
-    if (activePlayerType === 'html5') {
+    if (activePlayerType === 'html5' && html5Player) {
       html5Player.currentTime = time;
     } else if (activePlayerType === 'youtube' && isYtReady && ytPlayer && ytPlayer.seekTo) {
       ytPlayer.seekTo(time, true);
     }
+    if (timeCurrentEl) timeCurrentEl.textContent = formatTime(time);
+    updateTimelineProgress();
   }
 
   const unmuteBanner = document.getElementById('unmute-banner');
@@ -772,29 +798,70 @@
   // Custom Controls Timeline & Event Bindings
   if (playPauseBtn) playPauseBtn.addEventListener('click', togglePlayPause);
 
-  let touchHideControlsTimer = null;
+  // Controls Auto-Hide & Cursor Management (YouTube / Netflix style: controls never block subtitles)
+  let controlsHideTimer = null;
+  let isSubtitleMenuOpen = false;
+  let isScrubbingTimeline = false;
+
+  function showControls(durationMs = 2800) {
+    if (!playerWrapper) return;
+    playerWrapper.classList.add('show-controls');
+    playerWrapper.classList.remove('hide-cursor');
+    clearTimeout(controlsHideTimer);
+
+    // If video is paused, keep controls visible so user can adjust things
+    const isPaused = activePlayerType === 'html5' ? html5Player.paused : (ytPlayer && typeof ytPlayer.getPlayerState === 'function' && ytPlayer.getPlayerState() !== 1);
+    if (isPaused) return;
+
+    controlsHideTimer = setTimeout(() => {
+      // Don't auto-hide if paused, if subtitle menu is open, or if scrubbing timeline
+      if (isSubtitleMenuOpen || isScrubbingTimeline) return;
+      const currentlyPaused = activePlayerType === 'html5' ? html5Player.paused : false;
+      if (currentlyPaused) return;
+
+      playerWrapper.classList.remove('show-controls');
+      playerWrapper.classList.add('hide-cursor');
+    }, durationMs);
+  }
+
+  function hideControlsNow() {
+    if (!playerWrapper) return;
+    if (isSubtitleMenuOpen || isScrubbingTimeline) return;
+    const isPaused = activePlayerType === 'html5' ? html5Player.paused : false;
+    if (isPaused) return;
+
+    playerWrapper.classList.remove('show-controls');
+    playerWrapper.classList.add('hide-cursor');
+  }
+
   if (playerWrapper) {
+    // Mouse movement inside player shows controls and starts hide timer
+    playerWrapper.addEventListener('mousemove', () => {
+      showControls(2600);
+    });
+
+    // Mouse leaving player hides controls after a short delay
+    playerWrapper.addEventListener('mouseleave', () => {
+      clearTimeout(controlsHideTimer);
+      controlsHideTimer = setTimeout(() => {
+        hideControlsNow();
+      }, 400);
+    });
+
+    // Touch support for mobile
     playerWrapper.addEventListener('touchstart', (e) => {
       if (e.target.closest('#custom-controls') || e.target.closest('.floating-reaction-item')) return;
-      playerWrapper.classList.add('show-controls');
-      clearTimeout(touchHideControlsTimer);
-      touchHideControlsTimer = setTimeout(() => {
-        playerWrapper.classList.remove('show-controls');
-      }, 3500);
+      showControls(3500);
     }, { passive: true });
   }
 
   if (videoViewport) {
     // Click on video viewport toggles play/pause or toggles controls on touch
     document.getElementById('video-viewport')?.addEventListener('click', (e) => {
-      if (e.target.closest('#custom-controls') || e.target.closest('.floating-reaction-item')) return;
+      if (e.target.closest('#custom-controls') || e.target.closest('.floating-reaction-item') || e.target.closest('#subtitle-menu')) return;
       if (window.innerWidth <= 768 && playerWrapper) {
         if (!playerWrapper.classList.contains('show-controls')) {
-          playerWrapper.classList.add('show-controls');
-          clearTimeout(touchHideControlsTimer);
-          touchHideControlsTimer = setTimeout(() => {
-            playerWrapper.classList.remove('show-controls');
-          }, 3500);
+          showControls(3500);
           return;
         }
       }
@@ -804,12 +871,18 @@
 
   // HTML5 Video Events
   html5Player.addEventListener('play', () => {
+    showControls(2500);
     if (isSyncingFromServer) return;
     updatePlayPauseIcon(false);
     emitPlaybackAction('play', html5Player.currentTime);
   });
 
   html5Player.addEventListener('pause', () => {
+    if (playerWrapper) {
+      playerWrapper.classList.add('show-controls');
+      playerWrapper.classList.remove('hide-cursor');
+    }
+    clearTimeout(controlsHideTimer);
     if (isSyncingFromServer) return;
     updatePlayPauseIcon(true);
     emitPlaybackAction('pause', html5Player.currentTime);
@@ -839,6 +912,11 @@
       const bufferedEnd = html5Player.buffered.end(html5Player.buffered.length - 1);
       const bufPct = (bufferedEnd / duration) * 100;
       if (timelineBuffer) timelineBuffer.style.width = `${bufPct}%`;
+    }
+
+    // Synced Subtitle text rendering
+    if (typeof updateSubtitleDisplay === 'function') {
+      updateSubtitleDisplay(current);
     }
 
     requestAnimationFrame(updateProgress);
@@ -1035,6 +1113,295 @@
     });
   }
 
+  // -------------------------------------------------------------
+  // Subtitle / Closed Caption ([CC]) Engine
+  // -------------------------------------------------------------
+  const ctrlCcBtn = document.getElementById('ctrl-cc-btn');
+  const subtitleMenu = document.getElementById('subtitle-menu');
+  const subtitleTracksList = document.getElementById('subtitle-tracks-list');
+  const btnCloseSubMenu = document.getElementById('btn-close-sub-menu');
+  const subFileInput = document.getElementById('sub-file-input');
+  const btnToggleNativeControls = document.getElementById('btn-toggle-native-controls');
+  const customSubtitlesContainer = document.getElementById('custom-subtitles-container');
+  const customSubtitleText = document.getElementById('custom-subtitle-text');
+  const btnLoadSubMedia = document.getElementById('btn-load-sub-media');
+
+  let activeSubtitleCues = [];
+  let currentSubtitleTrack = 'off';
+  let customLoadedSubtitles = [];
+
+  function openSubtitleMenu() {
+    if (!subtitleMenu) return;
+    isSubtitleMenuOpen = true;
+    renderSubtitleTracksMenu();
+    subtitleMenu.style.display = 'flex';
+    if (playerWrapper) playerWrapper.classList.add('show-controls');
+  }
+
+  function closeSubtitleMenu() {
+    if (!subtitleMenu) return;
+    isSubtitleMenuOpen = false;
+    subtitleMenu.style.display = 'none';
+  }
+
+  function renderSubtitleTracksMenu() {
+    if (!subtitleTracksList) return;
+    subtitleTracksList.innerHTML = '';
+
+    // "Off" option
+    const offBtn = document.createElement('button');
+    offBtn.type = 'button';
+    offBtn.className = `sub-track-opt ${currentSubtitleTrack === 'off' ? 'active' : ''}`;
+    offBtn.textContent = currentSubtitleTrack === 'off' ? '✓ Off' : 'Off';
+    offBtn.addEventListener('click', () => {
+      setSubtitleTrack('off');
+      closeSubtitleMenu();
+    });
+    subtitleTracksList.appendChild(offBtn);
+
+    // Native embedded tracks in video
+    if (html5Player && html5Player.textTracks) {
+      for (let i = 0; i < html5Player.textTracks.length; i++) {
+        const track = html5Player.textTracks[i];
+        if (track.kind === 'subtitles' || track.kind === 'captions') {
+          const trackId = `native-${i}`;
+          const trackLabel = track.label || track.language || `Track ${i + 1}`;
+          const isSelected = currentSubtitleTrack === trackId;
+
+          const opt = document.createElement('button');
+          opt.type = 'button';
+          opt.className = `sub-track-opt ${isSelected ? 'active' : ''}`;
+          opt.textContent = `${isSelected ? '✓ ' : ''}${trackLabel} (Embedded)`;
+          opt.addEventListener('click', () => {
+            setSubtitleTrack(trackId, track);
+            closeSubtitleMenu();
+          });
+          subtitleTracksList.appendChild(opt);
+        }
+      }
+    }
+
+    // Custom uploaded tracks
+    customLoadedSubtitles.forEach((sub, idx) => {
+      const trackId = `custom-${idx}`;
+      const isSelected = currentSubtitleTrack === trackId;
+      const opt = document.createElement('button');
+      opt.type = 'button';
+      opt.className = `sub-track-opt ${isSelected ? 'active' : ''}`;
+      opt.textContent = `${isSelected ? '✓ ' : ''}${sub.name}`;
+      opt.addEventListener('click', () => {
+        setSubtitleTrack(trackId, null, sub);
+        closeSubtitleMenu();
+      });
+      subtitleTracksList.appendChild(opt);
+    });
+  }
+
+  function setSubtitleTrack(trackId, nativeTrack = null, customSub = null) {
+    currentSubtitleTrack = trackId;
+
+    // Turn off all native tracks first
+    if (html5Player && html5Player.textTracks) {
+      for (let i = 0; i < html5Player.textTracks.length; i++) {
+        html5Player.textTracks[i].mode = 'disabled';
+      }
+    }
+
+    if (trackId === 'off') {
+      activeSubtitleCues = [];
+      ctrlCcBtn?.classList.remove('cc-active');
+      if (customSubtitlesContainer) customSubtitlesContainer.style.display = 'none';
+      showToast('💬 Subtitles turned off');
+      return;
+    }
+
+    ctrlCcBtn?.classList.add('cc-active');
+
+    if (nativeTrack) {
+      nativeTrack.mode = 'showing';
+      showToast(`💬 Subtitles: ${nativeTrack.label || 'Embedded'}`);
+    } else if (customSub) {
+      activeSubtitleCues = customSub.cues;
+      showToast(`💬 Subtitles: ${customSub.name}`);
+    }
+  }
+
+  // Parse SRT and WebVTT formats
+  function parseSubtitleText(raw) {
+    const clean = raw.replace(/^\uFEFF/, '').replace(/\r\n|\r/g, '\n').trim();
+    const blocks = clean.split(/\n\s*\n/);
+    const cues = [];
+
+    const timeRegex = /(?:(\d{1,2}):)?(\d{2}):(\d{2})[,\.](\d{2,3})\s*-->\s*(?:(\d{1,2}):)?(\d{2}):(\d{2})[,\.](\d{2,3})/;
+
+    function toSec(h, m, s, ms) {
+      const hours = h ? parseInt(h, 10) : 0;
+      const minutes = parseInt(m, 10);
+      const seconds = parseInt(s, 10);
+      const millis = ms.length === 2 ? parseInt(ms, 10) * 10 : parseInt(ms, 10);
+      return hours * 3600 + minutes * 60 + seconds + millis / 1000;
+    }
+
+    for (const block of blocks) {
+      const lines = block.split('\n');
+      let timeLineIndex = -1;
+      let match = null;
+
+      for (let i = 0; i < lines.length; i++) {
+        match = lines[i].match(timeRegex);
+        if (match) {
+          timeLineIndex = i;
+          break;
+        }
+      }
+
+      if (match && timeLineIndex !== -1) {
+        const start = toSec(match[1], match[2], match[3], match[4]);
+        const end = toSec(match[5], match[6], match[7], match[8]);
+        const textLines = lines.slice(timeLineIndex + 1)
+          .map(l => l.replace(/<[^>]*>/g, '').trim())
+          .filter(Boolean);
+
+        if (textLines.length > 0) {
+          cues.push({
+            start,
+            end,
+            text: textLines.join('\n')
+          });
+        }
+      }
+    }
+    return cues;
+  }
+
+  function srtToVtt(srtContent) {
+    let clean = srtContent.replace(/^\uFEFF/, '').replace(/\r\n|\r/g, '\n');
+    if (clean.startsWith('WEBVTT')) return clean;
+    clean = clean.replace(/(\d{2}:\d{2}:\d{2}),(\d{3})/g, '$1.$2');
+    return 'WEBVTT\n\n' + clean;
+  }
+
+  function loadSubtitleFile(file) {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const content = e.target.result;
+      const cues = parseSubtitleText(content);
+      const vttContent = srtToVtt(content);
+
+      const blob = new Blob([vttContent], { type: 'text/vtt' });
+      const blobUrl = URL.createObjectURL(blob);
+
+      const subObj = {
+        name: file.name,
+        cues,
+        blobUrl
+      };
+
+      customLoadedSubtitles.push(subObj);
+      const trackId = `custom-${customLoadedSubtitles.length - 1}`;
+
+      // Add as HTML5 track element for native browser support
+      const trackEl = document.createElement('track');
+      trackEl.kind = 'subtitles';
+      trackEl.label = file.name.replace(/\.[^/.]+$/, '');
+      trackEl.srclang = 'en';
+      trackEl.src = blobUrl;
+      trackEl.default = true;
+      html5Player.appendChild(trackEl);
+
+      setSubtitleTrack(trackId, null, subObj);
+      closeSubtitleMenu();
+      showToast(`💬 Subtitles loaded: ${file.name}`);
+    };
+    reader.readAsText(file);
+  }
+
+  function updateSubtitleDisplay(currentTime) {
+    if (!customSubtitlesContainer || !customSubtitleText) return;
+    if (currentSubtitleTrack === 'off' || activeSubtitleCues.length === 0) {
+      if (customSubtitlesContainer.style.display !== 'none') {
+        customSubtitlesContainer.style.display = 'none';
+      }
+      return;
+    }
+
+    const cue = activeSubtitleCues.find(c => currentTime >= c.start && currentTime <= c.end);
+    if (cue) {
+      if (customSubtitleText.textContent !== cue.text) {
+        customSubtitleText.textContent = cue.text;
+      }
+      if (customSubtitlesContainer.style.display !== 'flex') {
+        customSubtitlesContainer.style.display = 'flex';
+      }
+    } else {
+      if (customSubtitlesContainer.style.display !== 'none') {
+        customSubtitlesContainer.style.display = 'none';
+      }
+    }
+  }
+
+  // CC Button Click
+  if (ctrlCcBtn) {
+    ctrlCcBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (subtitleMenu && subtitleMenu.style.display === 'flex') {
+        closeSubtitleMenu();
+      } else {
+        openSubtitleMenu();
+      }
+    });
+  }
+
+  if (btnCloseSubMenu) {
+    btnCloseSubMenu.addEventListener('click', (e) => {
+      e.stopPropagation();
+      closeSubtitleMenu();
+    });
+  }
+
+  // Close subtitle menu on click outside
+  document.addEventListener('click', (e) => {
+    if (subtitleMenu && subtitleMenu.style.display === 'flex') {
+      if (!e.target.closest('#subtitle-wrap')) {
+        closeSubtitleMenu();
+      }
+    }
+  });
+
+  // Subtitle file upload
+  if (subFileInput) {
+    subFileInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        loadSubtitleFile(file);
+        subFileInput.value = '';
+      }
+    });
+  }
+
+  // Media Tab Subtitle button
+  if (btnLoadSubMedia && subFileInput) {
+    btnLoadSubMedia.addEventListener('click', () => {
+      subFileInput.click();
+    });
+  }
+
+  // Toggle Native Browser Controls
+  let isNativeControlsActive = false;
+  if (btnToggleNativeControls) {
+    btnToggleNativeControls.addEventListener('click', () => {
+      isNativeControlsActive = !isNativeControlsActive;
+      html5Player.controls = isNativeControlsActive;
+      const customControls = document.getElementById('custom-controls');
+      if (customControls) {
+        customControls.style.display = isNativeControlsActive ? 'none' : 'flex';
+      }
+      showToast(isNativeControlsActive ? '🎛️ Switched to Native Browser Controls' : '🎬 Switched to Custom Cinema Controls');
+      closeSubtitleMenu();
+    });
+  }
+
   // Keyboard Shortcuts
   window.addEventListener('keydown', (e) => {
     // Ignore keyboard shortcuts if user is typing in chat or input fields
@@ -1057,6 +1424,8 @@
       muteBtn?.click();
     } else if (e.code === 'KeyF') {
       fullscreenBtn?.click();
+    } else if (e.code === 'KeyC') {
+      ctrlCcBtn?.click();
     }
   });
 
@@ -1263,11 +1632,18 @@
       e.preventDefault();
       playerWrapper.style.boxShadow = '';
       if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-        const file = e.dataTransfer.files[0];
-        if (file.type.startsWith('video/') || file.name.match(/\.(mp4|mkv|webm|mov|avi)$/i)) {
-          handleLocalVideoFile(file, false);
-        } else {
-          showToast('⚠️ Please drop a valid video file (MP4, WebM, MKV).');
+        const files = Array.from(e.dataTransfer.files);
+        const subFile = files.find(f => f.name.match(/\.(srt|vtt|ass|ssa)$/i));
+        const videoFile = files.find(f => f.type.startsWith('video/') || f.name.match(/\.(mp4|mkv|webm|mov|avi)$/i));
+
+        if (videoFile) {
+          handleLocalVideoFile(videoFile, false);
+        }
+        if (subFile) {
+          loadSubtitleFile(subFile);
+        }
+        if (!videoFile && !subFile) {
+          showToast('⚠️ Please drop a video or subtitle file (.srt, .vtt, .mp4, .mkv).');
         }
       }
     });
@@ -1582,14 +1958,16 @@
       const curr = getCurrentPlaybackTime();
       chatCurrentTsPill.textContent = `⏱️ ${formatTime(curr)}`;
     }
-  }, 1000);
+  }, 500);
 
-  // Click on stamp button: prepends [mm:ss] into text field
+  // Click on stamp button: prepends or updates [mm:ss] in chat input field
   if (chatStampBtn && chatInput) {
     chatStampBtn.addEventListener('click', () => {
       const curr = Math.floor(getCurrentPlaybackTime());
       const stamp = `[${formatTime(curr)}] `;
-      if (!chatInput.value.startsWith(stamp)) {
+      if (/^\[\d{1,2}:\d{2}(?::\d{2})?\]\s*/.test(chatInput.value)) {
+        chatInput.value = chatInput.value.replace(/^\[\d{1,2}:\d{2}(?::\d{2})?\]\s*/, stamp);
+      } else {
         chatInput.value = stamp + chatInput.value;
       }
       chatInput.focus();
@@ -1600,10 +1978,16 @@
     chatForm.addEventListener('submit', (e) => {
       e.preventDefault();
       const text = chatInput.value.trim();
-      if (!text || !socket) return;
+      if (!text) return;
+      if (!socket || !socket.connected) {
+        showToast('⚠️ Reconnecting to chat server...');
+        if (socket) socket.connect();
+        return;
+      }
       const videoTime = Math.floor(getCurrentPlaybackTime());
       socket.emit('send-message', { text, videoTime });
       chatInput.value = '';
+      chatInput.focus();
     });
   }
 
@@ -1612,6 +1996,31 @@
     chatMessagesList.innerHTML = '';
     messages.forEach(msg => appendChatMessage(msg, false));
     scrollChatToBottom();
+  }
+
+  function formatChatMessageWithTimestamps(rawText) {
+    if (!rawText) return '';
+    const escaped = escapeHtml(rawText);
+    return escaped.replace(/(\[?(?:\b\d{1,2}:)?\d{1,2}:\d{2}\b\]?)/g, (match) => {
+      const clean = match.replace(/[\[\]]/g, '');
+      const parts = clean.split(':').map(Number);
+      let sec = 0;
+      if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+        sec = parts[0] * 60 + parts[1];
+      } else if (parts.length === 3 && !isNaN(parts[0]) && !isNaN(parts[1]) && !isNaN(parts[2])) {
+        sec = parts[0] * 3600 + parts[1] * 60 + parts[2];
+      } else {
+        return match;
+      }
+      return `<button type="button" class="chat-video-ts-badge inline-ts" data-seek-time="${sec}" title="Click to jump to ${clean} in video"><span class="ts-icon">▶</span> ${clean}</button>`;
+    });
+  }
+
+  function jumpToTimestamp(target) {
+    if (isNaN(target)) return;
+    seekToTime(target);
+    emitPlaybackAction('seek', target);
+    showToast(`⚡ Jumped to scene at ${formatTime(target)}`);
   }
 
   function appendChatMessage(msg, scroll = true) {
@@ -1656,24 +2065,16 @@
               <span class="chat-time">${formatClock(msg.timestamp)}</span>
             </div>
           </div>
-          <div class="chat-text">${escapeHtml(msg.text)}</div>
+          <div class="chat-text">${formatChatMessageWithTimestamps(msg.text)}</div>
         </div>
       `;
 
-      // Make timestamp badge clickable to jump to that moment in the video
+      // Make all timestamp badges in header and inside message text clickable
       msgEl.querySelectorAll('.chat-video-ts-badge').forEach(btn => {
         btn.addEventListener('click', (e) => {
           e.stopPropagation();
           const target = parseFloat(btn.dataset.seekTime);
-          if (!isNaN(target)) {
-            seekToTime(target);
-            if (currentUser?.isHost || !roomState?.isHostOnly) {
-              emitPlaybackAction('seek', target);
-              showToast(`⚡ Jumped room to scene at ${formatTime(target)}`);
-            } else {
-              showToast(`⏱️ Jumped to scene at ${formatTime(target)}`);
-            }
-          }
+          jumpToTimestamp(target);
         });
       });
 
