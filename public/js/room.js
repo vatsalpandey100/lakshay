@@ -826,6 +826,8 @@
     return mouseY >= (rect.height * 0.90);
   }
 
+  let cursorHideTimer = null;
+
   function showControls(durationMs = 3200) {
     if (!playerWrapper) return;
     playerWrapper.classList.add('show-controls');
@@ -835,8 +837,16 @@
     controlsHideTimer = setTimeout(() => {
       if (isSubtitleMenuOpen || isScrubbingTimeline) return;
       playerWrapper.classList.remove('show-controls');
-      playerWrapper.classList.add('hide-cursor', 'hide-controls-idle');
+      playerWrapper.classList.add('hide-controls-idle');
     }, durationMs);
+  }
+
+  function hideControlsOnly() {
+    // Only hides the controls bar — NEVER hides the cursor immediately
+    if (!playerWrapper) return;
+    if (isSubtitleMenuOpen || isScrubbingTimeline) return;
+    playerWrapper.classList.remove('show-controls', 'is-paused');
+    playerWrapper.classList.add('hide-controls-idle');
   }
 
   function hideControlsNow() {
@@ -846,25 +856,38 @@
     playerWrapper.classList.add('hide-cursor', 'hide-controls-idle');
   }
 
+  function resetCursorIdleTimer() {
+    if (!playerWrapper) return;
+    playerWrapper.classList.remove('hide-cursor');
+    clearTimeout(cursorHideTimer);
+    cursorHideTimer = setTimeout(() => {
+      if (!isScrubbingTimeline && !isSubtitleMenuOpen) {
+        playerWrapper.classList.add('hide-cursor');
+      }
+    }, 2800);
+  }
+
   if (playerWrapper) {
     // Show controls initially briefly
     showControls(3000);
 
-    // Mouse movement: Only show when hovering bottom 1/10th
+    // Mouse movement: Controls only show when hovering bottom 1/10th, cursor always remains visible while moving
     playerWrapper.addEventListener('mouseenter', (e) => {
+      resetCursorIdleTimer();
       if (isCursorInBottomTenth(e)) {
         showControls(3200);
       } else {
-        hideControlsNow();
+        hideControlsOnly();
       }
     });
 
     playerWrapper.addEventListener('mousemove', (e) => {
+      resetCursorIdleTimer();
       if (isCursorInBottomTenth(e) || isScrubbingTimeline) {
         showControls(3200);
       } else {
         if (!isScrubbingTimeline && !isSubtitleMenuOpen) {
-          hideControlsNow();
+          hideControlsOnly();
         }
       }
     });
