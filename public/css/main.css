@@ -27,7 +27,7 @@
   --text-secondary: #94a3b8;
   --text-muted: #64748b;
 
-  --font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Outfit', 'Inter', system-ui, sans-serif;
+  --font-family: 'Outfit', 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif;
   --radius-sm: 10px;
   --radius-md: 18px;
   --radius-lg: 26px;
@@ -3181,39 +3181,48 @@ video::cue {
 }
 
 /* ========================================================
-   WORLD-CLASS LAKSHAY CINEMATIC SPLASH SCREEN
+   MODERN CINEMATIC SPLASH SCREEN (Apple / A24 Inspired)
    ======================================================== */
 .splash-overlay {
   position: fixed;
   inset: 0;
   z-index: 999999;
-  background: #040509;
+  background: #05060b;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   overflow: hidden;
   user-select: none;
-  transition: opacity 0.85s cubic-bezier(0.16, 1, 0.3, 1), transform 0.85s cubic-bezier(0.16, 1, 0.3, 1), filter 0.85s ease;
+  cursor: pointer;
+  transition: opacity 0.45s cubic-bezier(0.16, 1, 0.3, 1), transform 0.45s cubic-bezier(0.16, 1, 0.3, 1), filter 0.45s ease;
 }
 
 .splash-overlay.splash-exit {
   opacity: 0;
-  transform: scale(1.08);
-  filter: blur(12px) brightness(1.6);
+  transform: scale(1.04);
+  filter: blur(8px);
   pointer-events: none;
 }
 
-/* Starfield / Cosmic Particle Canvas */
-.splash-canvas {
+/* Ambient Subtle Radial Aura */
+.splash-ambient-aura {
   position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
+  width: 500px;
+  height: 500px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(124, 58, 237, 0.22) 0%, rgba(56, 189, 248, 0.08) 45%, transparent 70%);
+  filter: blur(50px);
   pointer-events: none;
+  animation: splashAuraPulse 2.8s ease-in-out infinite alternate;
 }
 
-/* Center Holographic Reactor & Emblem */
+@keyframes splashAuraPulse {
+  0% { transform: scale(0.92); opacity: 0.7; }
+  100% { transform: scale(1.12); opacity: 1; }
+}
+
+/* Center Presentation Card */
 .splash-content {
   position: relative;
   z-index: 10;
@@ -3221,278 +3230,112 @@ video::cue {
   flex-direction: column;
   align-items: center;
   text-align: center;
+  animation: splashContentEnter 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
-.splash-emblem-wrapper {
-  position: relative;
-  width: 180px;
-  height: 180px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-bottom: 2.5rem;
-}
-
-/* Outer Rotating Holographic Rings */
-.splash-ring {
-  position: absolute;
-  border-radius: 50%;
-  pointer-events: none;
-}
-
-.splash-ring-1 {
-  width: 170px;
-  height: 170px;
-  border: 2px dashed rgba(139, 92, 246, 0.5);
-  animation: splashSpinClockwise 12s linear infinite;
-  box-shadow: 0 0 30px rgba(139, 92, 246, 0.3);
-}
-
-.splash-ring-2 {
-  width: 140px;
-  height: 140px;
-  border: 2px solid transparent;
-  border-top-color: #06b6d4;
-  border-bottom-color: #ec4899;
-  animation: splashSpinCounter 6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
-  box-shadow: 0 0 35px rgba(6, 182, 212, 0.4);
-}
-
-.splash-ring-3 {
-  width: 100px;
-  height: 100px;
-  border: 1px solid rgba(255, 255, 255, 0.25);
-  border-left-color: #a855f7;
-  border-right-color: #3b82f6;
-  animation: splashSpinClockwise 4s linear infinite;
-}
-
-@keyframes splashSpinClockwise {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
-@keyframes splashSpinCounter {
-  from { transform: rotate(360deg); }
-  to { transform: rotate(0deg); }
-}
-
-/* Central Anime Cinema Core */
-.splash-core {
-  width: 76px;
-  height: 76px;
-  border-radius: 22px;
-  background: linear-gradient(135deg, #8b5cf6 0%, #3b82f6 50%, #06b6d4 100%);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 2.25rem;
-  box-shadow: 0 0 45px rgba(139, 92, 246, 0.9), 0 0 90px rgba(6, 182, 212, 0.5);
-  animation: splashCorePulse 2.4s ease-in-out infinite alternate;
-  position: relative;
-  z-index: 5;
-}
-
-@keyframes splashCorePulse {
+@keyframes splashContentEnter {
   0% {
-    transform: scale(0.92) rotate(-2deg);
-    box-shadow: 0 0 35px rgba(139, 92, 246, 0.6);
-  }
-  100% {
-    transform: scale(1.08) rotate(3deg);
-    box-shadow: 0 0 65px rgba(139, 92, 246, 1), 0 0 110px rgba(6, 182, 212, 0.7);
-  }
-}
-
-/* Shockwave Aura */
-.splash-shockwave {
-  position: absolute;
-  width: 60px;
-  height: 60px;
-  border-radius: 50%;
-  border: 2px solid rgba(139, 92, 246, 0.8);
-  animation: splashShockwave 2.2s cubic-bezier(0.1, 0.8, 0.2, 1) infinite;
-  pointer-events: none;
-}
-
-@keyframes splashShockwave {
-  0% {
-    width: 60px;
-    height: 60px;
-    opacity: 0.9;
-    border-color: rgba(6, 182, 212, 0.9);
-  }
-  100% {
-    width: 320px;
-    height: 320px;
     opacity: 0;
-    border-color: rgba(139, 92, 246, 0);
-  }
-}
-
-/* Grand Typographic Title: L A K S H A Y */
-.splash-title-wrap {
-  position: relative;
-  margin-bottom: 0.75rem;
-  overflow: hidden;
-  padding: 0.5rem 1rem;
-}
-
-.splash-title {
-  font-family: var(--font-family);
-  font-size: clamp(3.2rem, 7vw, 5.5rem);
-  font-weight: 900;
-  letter-spacing: 0.28em;
-  text-transform: uppercase;
-  background: linear-gradient(110deg, #ffffff 0%, #cbd5e1 25%, #a855f7 50%, #38bdf8 75%, #ffffff 100%);
-  background-size: 200% auto;
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  animation: splashTextShimmer 3.2s linear infinite, splashLetterExpand 1.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-  text-shadow: 0 0 40px rgba(139, 92, 246, 0.45);
-  display: block;
-}
-
-@keyframes splashTextShimmer {
-  0% { background-position: 0% 50%; }
-  100% { background-position: 200% 50%; }
-}
-
-@keyframes splashLetterExpand {
-  0% {
-    letter-spacing: 0.05em;
-    opacity: 0;
-    transform: translateY(20px) scale(0.95);
+    transform: translateY(14px) scale(0.96);
   }
   100% {
-    letter-spacing: 0.28em;
     opacity: 1;
     transform: translateY(0) scale(1);
   }
 }
 
-/* Tagline Subtitle */
-.splash-subtitle {
-  font-size: clamp(0.75rem, 1.6vw, 0.95rem);
-  font-weight: 600;
-  color: var(--text-secondary);
-  letter-spacing: 0.4em;
-  text-transform: uppercase;
+/* Modern Minimalist Glass Emblem */
+.splash-logo-mark {
+  position: relative;
+  width: 84px;
+  height: 84px;
+  border-radius: 24px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.03) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
   display: flex;
   align-items: center;
-  gap: 1rem;
-  opacity: 0;
-  animation: splashFadeInUp 1.2s cubic-bezier(0.16, 1, 0.3, 1) 0.6s forwards;
+  justify-content: center;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6), 0 0 35px rgba(124, 58, 237, 0.35);
+  margin-bottom: 1.75rem;
 }
 
-.splash-sub-line {
-  width: 40px;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(139, 92, 246, 0.8), transparent);
-}
-
-@keyframes splashFadeInUp {
-  0% { opacity: 0; transform: translateY(12px); }
-  100% { opacity: 1; transform: translateY(0); }
-}
-
-/* Bottom Progress Loader Bar & Status */
-.splash-bottom-bar {
+.splash-logo-glow {
   position: absolute;
-  bottom: 40px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 90%;
-  max-width: 360px;
+  inset: -2px;
+  border-radius: 26px;
+  background: linear-gradient(135deg, rgba(124, 58, 237, 0.6), rgba(56, 189, 248, 0.5));
+  z-index: -1;
+  filter: blur(12px);
+  opacity: 0.7;
+}
+
+.splash-logo-icon {
+  font-size: 2.4rem;
+  line-height: 1;
+  filter: drop-shadow(0 0 14px rgba(167, 139, 250, 0.8));
+  animation: splashIconShimmer 2s ease-in-out infinite alternate;
+}
+
+@keyframes splashIconShimmer {
+  0% { transform: scale(0.96); filter: drop-shadow(0 0 10px rgba(167, 139, 250, 0.6)); }
+  100% { transform: scale(1.04); filter: drop-shadow(0 0 20px rgba(56, 189, 248, 0.9)); }
+}
+
+/* Brand Name & Tagline */
+.splash-brand-text {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.6rem;
-  z-index: 10;
+  gap: 0.4rem;
+  margin-bottom: 2rem;
 }
 
-.splash-status-text {
-  font-family: monospace;
-  font-size: 0.72rem;
-  letter-spacing: 0.12em;
-  color: var(--accent-cyan);
+.splash-brand-title {
+  font-family: var(--font-family);
+  font-size: clamp(2.4rem, 5vw, 3.8rem);
+  font-weight: 800;
+  letter-spacing: 0.32em;
+  text-indent: 0.32em;
   text-transform: uppercase;
+  background: linear-gradient(120deg, #ffffff 20%, #c4b5fd 60%, #38bdf8 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  margin: 0;
+  line-height: 1.1;
 }
 
-.splash-progress-track {
-  width: 100%;
-  height: 3px;
-  background: rgba(255, 255, 255, 0.1);
+.splash-brand-tagline {
+  font-size: 0.76rem;
+  font-weight: 600;
+  letter-spacing: 0.38em;
+  text-indent: 0.38em;
+  color: rgba(255, 255, 255, 0.55);
+  text-transform: uppercase;
+  margin: 0;
+}
+
+/* Hairline Luxury Progress Bar */
+.splash-loader-wrap {
+  width: 140px;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.08);
   border-radius: var(--radius-full);
   overflow: hidden;
   position: relative;
 }
 
-.splash-progress-fill {
+.splash-loader-bar {
   position: absolute;
   top: 0;
   left: 0;
-  bottom: 0;
+  height: 100%;
   width: 0%;
-  background: linear-gradient(90deg, #8b5cf6, #06b6d4, #ec4899);
+  background: linear-gradient(90deg, #8b5cf6, #38bdf8);
   border-radius: var(--radius-full);
-  box-shadow: 0 0 12px rgba(6, 182, 212, 0.8);
-  transition: width 0.15s ease-out;
-}
-
-/* Skip Intro Action Button */
-.splash-skip-btn {
-  position: absolute;
-  top: 28px;
-  right: 28px;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  color: var(--text-secondary);
-  font-size: 0.75rem;
-  font-weight: 600;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  padding: 6px 14px;
-  border-radius: var(--radius-full);
-  cursor: pointer;
-  transition: all 0.2s ease;
-  z-index: 20;
-  backdrop-filter: blur(10px);
-}
-
-.splash-skip-btn:hover {
-  background: rgba(139, 92, 246, 0.25);
-  border-color: var(--accent-purple);
-  color: #fff;
-  transform: scale(1.05);
-}
-
-/* Spatial Sound Toggle Pill (Apple Style) */
-.splash-sound-pill {
-  position: absolute;
-  top: 28px;
-  left: 28px;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  color: #fff;
-  font-size: 0.75rem;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  padding: 6px 14px;
-  border-radius: var(--radius-full);
-  backdrop-filter: blur(16px);
-  cursor: pointer;
-  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-  z-index: 20;
-}
-
-.splash-sound-pill:hover {
-  background: rgba(6, 182, 212, 0.2);
-  border-color: var(--accent-cyan);
-  transform: scale(1.04);
+  box-shadow: 0 0 8px rgba(56, 189, 248, 0.8);
+  transition: width 0.1s linear;
 }
 
 .sound-wave-bars {
