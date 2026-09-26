@@ -811,10 +811,20 @@
   // Custom Controls Timeline & Event Bindings
   if (playPauseBtn) playPauseBtn.addEventListener('click', togglePlayPause);
 
-  // Controls Auto-Hide & Cursor Management (Controls always show on hover or pause)
+  // Controls Auto-Hide & Cursor Management
+  // User Requirement: Hovering through bottom 1/10 of video then only that control should be shown
   let controlsHideTimer = null;
   let isSubtitleMenuOpen = false;
   let isScrubbingTimeline = false;
+
+  function isCursorInBottomTenth(e) {
+    if (!playerWrapper) return false;
+    if (e.target && e.target.closest && e.target.closest('#custom-controls')) return true;
+    const rect = playerWrapper.getBoundingClientRect();
+    if (!rect || !rect.height) return false;
+    const mouseY = e.clientY - rect.top;
+    return mouseY >= (rect.height * 0.90);
+  }
 
   function showControls(durationMs = 3200) {
     if (!playerWrapper) return;
@@ -822,22 +832,8 @@
     playerWrapper.classList.remove('hide-cursor', 'hide-controls-idle');
     clearTimeout(controlsHideTimer);
 
-    // If video is paused, keep controls visible so user can adjust things
-    const isPaused = activePlayerType === 'html5' ? html5Player.paused : (ytPlayer && typeof ytPlayer.getPlayerState === 'function' && ytPlayer.getPlayerState() !== 1);
-    if (isPaused) {
-      playerWrapper.classList.add('is-paused');
-      return;
-    }
-    playerWrapper.classList.remove('is-paused');
-
     controlsHideTimer = setTimeout(() => {
       if (isSubtitleMenuOpen || isScrubbingTimeline) return;
-      const currentlyPaused = activePlayerType === 'html5' ? html5Player.paused : false;
-      if (currentlyPaused) {
-        playerWrapper.classList.add('is-paused');
-        return;
-      }
-
       playerWrapper.classList.remove('show-controls');
       playerWrapper.classList.add('hide-cursor', 'hide-controls-idle');
     }, durationMs);
@@ -846,48 +842,63 @@
   function hideControlsNow() {
     if (!playerWrapper) return;
     if (isSubtitleMenuOpen || isScrubbingTimeline) return;
-    const isPaused = activePlayerType === 'html5' ? html5Player.paused : false;
-    if (isPaused) {
-      playerWrapper.classList.add('is-paused');
-      return;
-    }
-
-    playerWrapper.classList.remove('show-controls');
+    playerWrapper.classList.remove('show-controls', 'is-paused');
     playerWrapper.classList.add('hide-cursor', 'hide-controls-idle');
   }
 
   if (playerWrapper) {
-    // Show controls initially
-    showControls(4000);
+    // Show controls initially briefly
+    showControls(3000);
 
-    // Mouse movement or hover inside player shows controls instantly
-    playerWrapper.addEventListener('mouseenter', () => {
-      showControls(3200);
+    // Mouse movement: Only show when hovering bottom 1/10th
+    playerWrapper.addEventListener('mouseenter', (e) => {
+      if (isCursorInBottomTenth(e)) {
+        showControls(3200);
+      } else {
+        hideControlsNow();
+      }
     });
 
-    playerWrapper.addEventListener('mousemove', () => {
-      showControls(3200);
+    playerWrapper.addEventListener('mousemove', (e) => {
+      if (isCursorInBottomTenth(e) || isScrubbingTimeline) {
+        showControls(3200);
+      } else {
+        if (!isScrubbingTimeline && !isSubtitleMenuOpen) {
+          hideControlsNow();
+        }
+      }
     });
 
-    // Mouse leaving player hides controls after a short delay
+    // Mouse leaving player hides controls immediately
     playerWrapper.addEventListener('mouseleave', () => {
       clearTimeout(controlsHideTimer);
-      controlsHideTimer = setTimeout(() => {
-        hideControlsNow();
-      }, 500);
+      hideControlsNow();
     });
 
     // Touch support for mobile
     playerWrapper.addEventListener('touchstart', (e) => {
-      if (e.target.closest('#custom-controls') || e.target.closest('.floating-reaction-item')) return;
-      showControls(3500);
+      if (e.target.closest('#custom-controls') || e.target.closest('.floating-reaction-item') || e.target.closest('#video-floating-chat-overlay') || e.target.closest('#video-corner-chat-btn')) return;
+      const touch = e.touches[0];
+      if (touch) {
+        const rect = playerWrapper.getBoundingClientRect();
+        const touchY = touch.clientY - rect.top;
+        if (touchY >= rect.height * 0.88) {
+          showControls(3500);
+        }
+      }
     }, { passive: true });
   }
 
   if (videoViewport) {
     // Click on video viewport toggles play/pause or toggles controls on touch
     document.getElementById('video-viewport')?.addEventListener('click', (e) => {
-      if (e.target.closest('#custom-controls') || e.target.closest('.floating-reaction-item') || e.target.closest('#subtitle-menu')) return;
+      if (
+        e.target.closest('#custom-controls') || 
+        e.target.closest('.floating-reaction-item') || 
+        e.target.closest('#subtitle-menu') ||
+        e.target.closest('#video-floating-chat-overlay') ||
+        e.target.closest('#video-corner-chat-btn')
+      ) return;
       if (window.innerWidth <= 768 && playerWrapper) {
         if (!playerWrapper.classList.contains('show-controls')) {
           showControls(3500);
@@ -1455,6 +1466,14 @@
       fullscreenBtn?.click();
     } else if (e.code === 'KeyC') {
       ctrlCcBtn?.click();
+    } else if (e.code === 'KeyT' || e.code === 'KeyV') {
+      videoCornerChatBtn?.click();
+    } else if (e.code === 'Enter' && document.fullscreenElement) {
+      e.preventDefault();
+      if (floatingQuickChatForm) {
+        floatingQuickChatForm.style.display = 'block';
+        floatingQuickChatInput?.focus();
+      }
     }
   });
 
@@ -2334,6 +2353,11 @@
       });
 
       chatMessagesList.appendChild(msgEl);
+
+      // Render directly over the video in fullscreen / maximized mode
+      if (typeof appendFloatingOverlayMessage === 'function') {
+        appendFloatingOverlayMessage(msg);
+      }
     }
 
     if (scroll) scrollChatToBottom();
@@ -2343,6 +2367,243 @@
     if (chatMessagesList) {
       chatMessagesList.scrollTop = chatMessagesList.scrollHeight;
     }
+  }
+
+  // -------------------------------------------------------------
+  // Fullscreen / Maximized On-Video Transparent Floating Chat
+  // -------------------------------------------------------------
+  const floatingChatOverlay = document.getElementById('video-floating-chat-overlay');
+  const floatingChatStream = document.getElementById('floating-chat-stream');
+  const videoCornerChatBtn = document.getElementById('video-corner-chat-btn');
+  const ctrlOverlayChatBtn = document.getElementById('ctrl-overlay-chat-btn');
+  const cornerChatDot = document.getElementById('corner-chat-dot');
+  const floatingQuickChatForm = document.getElementById('floating-quick-chat-form');
+  const floatingQuickChatInput = document.getElementById('floating-quick-chat-input');
+
+  let isOverlayChatEnabled = true;
+
+  function setOverlayChatEnabled(enabled) {
+    isOverlayChatEnabled = enabled;
+    if (floatingChatOverlay) {
+      floatingChatOverlay.style.display = enabled ? 'flex' : 'none';
+    }
+    if (videoCornerChatBtn) {
+      videoCornerChatBtn.classList.toggle('active', enabled);
+    }
+    if (ctrlOverlayChatBtn) {
+      ctrlOverlayChatBtn.classList.toggle('overlay-chat-active', enabled);
+    }
+    if (enabled && cornerChatDot) {
+      cornerChatDot.style.display = 'none';
+    }
+    showToast(enabled ? '💬 On-Video Chat Enabled' : '🔇 On-Video Chat Hidden');
+  }
+
+  // Toggle buttons
+  if (videoCornerChatBtn) {
+    videoCornerChatBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      setOverlayChatEnabled(!isOverlayChatEnabled);
+    });
+  }
+
+  if (ctrlOverlayChatBtn) {
+    ctrlOverlayChatBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      setOverlayChatEnabled(!isOverlayChatEnabled);
+    });
+  }
+
+  // Track Fullscreen state
+  document.addEventListener('fullscreenchange', () => {
+    const isFull = !!document.fullscreenElement;
+    if (playerWrapper) {
+      playerWrapper.classList.toggle('is-fullscreen', isFull);
+    }
+    if (fullscreenBtn) {
+      const icon = fullscreenBtn.querySelector('#fullscreen-icon') || fullscreenBtn;
+      icon.textContent = isFull ? '🗗' : '⛶';
+    }
+    if (isFull) {
+      showControls(3000);
+    }
+  });
+
+  // Append a transparent floating message directly over the video
+  function appendFloatingOverlayMessage(msg) {
+    if (!floatingChatStream) return;
+    if (!isOverlayChatEnabled) {
+      if (cornerChatDot) cornerChatDot.style.display = 'block';
+      return;
+    }
+
+    const wasNearBottom = (floatingChatStream.scrollHeight - floatingChatStream.scrollTop - floatingChatStream.clientHeight) < 75;
+    const isYou = currentUser && msg.user && msg.user.socketId === currentUser.socketId;
+
+    const row = document.createElement('div');
+    row.className = 'floating-msg-row';
+    row.dataset.msgId = msg.id || String(Date.now());
+
+    const hasVideoTime = typeof msg.videoTime === 'number' && msg.videoTime >= 0;
+    const tsHtml = hasVideoTime ? `
+      <button type="button" class="chat-video-ts-badge floating-ts" data-seek-time="${msg.videoTime}" title="Jump to ${formatTime(msg.videoTime)}">
+        ▶ ${formatTime(msg.videoTime)}
+      </button>
+    ` : '';
+
+    row.innerHTML = `
+      <span class="floating-msg-avatar">${renderAvatar(msg.user?.avatar)}</span>
+      <span class="floating-msg-author ${isYou ? 'is-you' : ''}">${escapeHtml(msg.user?.username || 'Guest')}:</span>
+      <span class="floating-msg-text">${formatChatMessageWithTimestamps(msg.text)}</span>
+      ${tsHtml}
+    `;
+
+    // Make timestamp badges clickable in floating messages
+    row.querySelectorAll('.chat-video-ts-badge').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const target = parseFloat(btn.dataset.seekTime);
+        jumpToTimestamp(target);
+      });
+    });
+
+    floatingChatStream.appendChild(row);
+
+    // Keep up to 30 messages in the stream so users can scroll up and review
+    while (floatingChatStream.children.length > 30) {
+      floatingChatStream.removeChild(floatingChatStream.firstChild);
+    }
+
+    // Auto-scroll to keep newest message visible unless user scrolled upward
+    if (wasNearBottom) {
+      floatingChatStream.scrollTop = floatingChatStream.scrollHeight;
+    }
+  }
+
+  function openFloatingQuickChat() {
+    if (!floatingQuickChatForm || !floatingQuickChatInput) return;
+    floatingQuickChatForm.style.display = 'block';
+    floatingQuickChatInput.focus();
+  }
+
+  // Keyboard shortcut: Press Enter or T to open chat input in fullscreen / player
+  document.addEventListener('keydown', (e) => {
+    const activeEl = document.activeElement;
+    if (activeEl && ['INPUT', 'TEXTAREA', 'SELECT'].includes(activeEl.tagName)) {
+      if (e.key === 'Escape' && activeEl === floatingQuickChatInput) {
+        floatingQuickChatForm.style.display = 'none';
+      }
+      return;
+    }
+
+    if (e.key === 'Enter' || e.code === 'KeyT') {
+      if (isOverlayChatEnabled) {
+        e.preventDefault();
+        openFloatingQuickChat();
+      }
+    }
+  });
+
+  // Fullscreen Quick Input Form
+  if (floatingQuickChatForm && floatingQuickChatInput) {
+    floatingQuickChatForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const text = floatingQuickChatInput.value.trim();
+      if (!text) return;
+      const videoTime = Math.floor(getCurrentPlaybackTime());
+      socket.emit('send-message', { text, videoTime });
+      floatingQuickChatInput.value = '';
+      floatingQuickChatForm.style.display = 'none';
+      if (chatInput) chatInput.value = '';
+    });
+
+    floatingQuickChatInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        floatingQuickChatForm.style.display = 'none';
+      }
+    });
+
+    floatingQuickChatInput.addEventListener('blur', () => {
+      setTimeout(() => {
+        floatingQuickChatForm.style.display = 'none';
+      }, 200);
+    });
+  }
+
+  // -------------------------------------------------------------
+  // Dynamic Video Luminance Detector (Light vs Dark Video Scenes)
+  // -------------------------------------------------------------
+  const lumCanvas = document.createElement('canvas');
+  lumCanvas.width = 32;
+  lumCanvas.height = 24;
+  let lumCtx = null;
+  try {
+    lumCtx = lumCanvas.getContext('2d', { willReadFrequently: true });
+  } catch (e) {}
+
+  let currentVideoLuminance = 'dark';
+
+  function sampleVideoLuminance() {
+    if (!floatingChatOverlay || !html5Player || !lumCtx) return;
+    if (activePlayerType !== 'html5' || html5Player.readyState < 2 || html5Player.paused) return;
+
+    try {
+      const vw = html5Player.videoWidth;
+      const vh = html5Player.videoHeight;
+      if (!vw || !vh) return;
+
+      // Sample bottom-right quadrant where messages float
+      const sx = Math.floor(vw * 0.55);
+      const sy = Math.floor(vh * 0.5);
+      const sw = Math.floor(vw * 0.43);
+      const sh = Math.floor(vh * 0.45);
+
+      lumCtx.drawImage(html5Player, sx, sy, sw, sh, 0, 0, 32, 24);
+      const imgData = lumCtx.getImageData(0, 0, 32, 24).data;
+
+      let totalLum = 0;
+      let lightPixels = 0;
+      const totalPixels = imgData.length / 4;
+
+      for (let i = 0; i < imgData.length; i += 4) {
+        const r = imgData[i];
+        const g = imgData[i + 1];
+        const b = imgData[i + 2];
+        const lum = (0.2126 * r + 0.7152 * g + 0.0722 * b);
+        totalLum += lum;
+        if (lum > 135) lightPixels++;
+      }
+
+      const avgLum = totalLum / totalPixels;
+      const isLightScene = avgLum > 135 || (lightPixels / totalPixels) > 0.55;
+      const sceneType = isLightScene ? 'light' : 'dark';
+
+      if (sceneType !== currentVideoLuminance) {
+        currentVideoLuminance = sceneType;
+        if (sceneType === 'light') {
+          floatingChatOverlay.classList.add('lum-light-scene');
+          floatingChatOverlay.classList.remove('lum-dark-scene');
+        } else {
+          floatingChatOverlay.classList.add('lum-dark-scene');
+          floatingChatOverlay.classList.remove('lum-light-scene');
+        }
+      }
+    } catch (err) {
+      if (!floatingChatOverlay.classList.contains('lum-dark-scene')) {
+        floatingChatOverlay.classList.add('lum-dark-scene');
+      }
+    }
+  }
+
+  setInterval(sampleVideoLuminance, 250);
+
+  // Initialize overlay chat in active state
+  if (videoCornerChatBtn) videoCornerChatBtn.classList.add('active');
+  if (ctrlOverlayChatBtn) ctrlOverlayChatBtn.classList.add('overlay-chat-active');
+  if (floatingChatOverlay) {
+    floatingChatOverlay.classList.add('lum-dark-scene');
+    floatingChatOverlay.style.display = 'flex';
   }
 
   // Queue Rendering

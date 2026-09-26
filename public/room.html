@@ -130,6 +130,22 @@
               <span class="custom-subtitle-text" id="custom-subtitle-text"></span>
             </div>
 
+            <!-- Floating Transparent On-Video Chat Overlay (Fullscreen / Maximized) -->
+            <div class="video-floating-chat-overlay" id="video-floating-chat-overlay">
+              <div class="floating-chat-stream" id="floating-chat-stream">
+                <!-- Pure floating messages directly over the video with NO background, NO box, NO blur layer -->
+              </div>
+              <form class="floating-quick-chat-form" id="floating-quick-chat-form" style="display: none;">
+                <input type="text" id="floating-quick-chat-input" class="floating-quick-chat-input" placeholder="Type message in fullscreen... (Enter to send)" maxlength="300" autocomplete="off">
+              </form>
+            </div>
+
+            <!-- Compact Corner Chat Control (Bottom-Right of Video) -->
+            <button type="button" class="video-corner-chat-btn" id="video-corner-chat-btn" title="Toggle On-Video Messages (T)" aria-label="Toggle Overlay Messages">
+              <span id="corner-chat-icon" class="corner-chat-icon">💬</span>
+              <span id="corner-chat-dot" class="corner-chat-dot" style="display: none;"></span>
+            </button>
+
             <!-- Custom Video Controls Overlay -->
             <div class="custom-controls-bar" id="custom-controls">
               <!-- Scrubber Timeline -->
@@ -172,29 +188,6 @@
                     <span>⚡ Resync</span>
                   </button>
 
-                  <!-- Subtitles / Closed Captions Toggle & Menu -->
-                  <div class="subtitle-wrap" id="subtitle-wrap">
-                    <button type="button" class="ctrl-btn" id="ctrl-cc-btn" title="Subtitles & Tracks (C)">
-                      <span id="cc-icon" class="cc-badge">CC</span>
-                    </button>
-                    <div class="subtitle-menu" id="subtitle-menu" style="display: none;">
-                      <div class="subtitle-menu-header">
-                        <span>💬 Subtitles & Tracks</span>
-                        <button type="button" id="btn-close-sub-menu" class="sub-close-btn" title="Close">✕</button>
-                      </div>
-                      <div class="subtitle-tracks-list" id="subtitle-tracks-list">
-                        <button type="button" class="sub-track-opt active" data-track-id="off">Off</button>
-                      </div>
-                      <div class="subtitle-menu-divider"></div>
-                      <label class="sub-menu-action-btn" for="sub-file-input">
-                        <span>📂 Load Subtitle (.srt / .vtt)</span>
-                        <input type="file" id="sub-file-input" accept=".srt,.vtt,.ass,.ssa" style="display: none;">
-                      </label>
-                      <button type="button" class="sub-menu-action-btn" id="btn-toggle-native-controls">
-                        <span>🎛️ Toggle Native Controls</span>
-                      </button>
-                    </div>
-                  </div>
 
                   <select id="ctrl-playback-rate" class="input-field" style="width: auto; padding: 0.25rem 0.5rem; font-size: 0.75rem; height: 32px;" title="Playback Speed">
                     <option value="0.5">0.5x</option>
@@ -204,6 +197,10 @@
                     <option value="1.5">1.5x</option>
                     <option value="2">2.0x</option>
                   </select>
+
+                  <button type="button" class="ctrl-btn" id="ctrl-overlay-chat-btn" title="Toggle On-Video Overlay Chat (T)" aria-label="Toggle Overlay Chat">
+                    <span id="overlay-chat-icon">💬</span>
+                  </button>
 
                   <button type="button" class="ctrl-btn" id="ctrl-pip-btn" title="Picture in Picture">
                     <span>🪟</span>
