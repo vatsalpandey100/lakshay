@@ -2440,7 +2440,6 @@
   const floatingChatOverlay = document.getElementById('video-floating-chat-overlay');
   const floatingChatStream = document.getElementById('floating-chat-stream');
   const videoCornerChatBtn = document.getElementById('video-corner-chat-btn');
-  const ctrlOverlayChatBtn = document.getElementById('ctrl-overlay-chat-btn');
   const cornerChatDot = document.getElementById('corner-chat-dot');
   const floatingQuickChatForm = document.getElementById('floating-quick-chat-form');
   const floatingQuickChatInput = document.getElementById('floating-quick-chat-input');
@@ -2462,9 +2461,6 @@
     }
     if (videoCornerChatBtn) {
       videoCornerChatBtn.classList.toggle('active', enabled);
-    }
-    if (ctrlOverlayChatBtn) {
-      ctrlOverlayChatBtn.classList.toggle('overlay-chat-active', enabled);
     }
     if (enabled && cornerChatDot) {
       cornerChatDot.style.display = 'none';
@@ -2489,14 +2485,6 @@
     });
   }
 
-  // Controls bar chat button: toggles overlay visibility
-  if (ctrlOverlayChatBtn) {
-    ctrlOverlayChatBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      setOverlayChatEnabled(!isOverlayChatEnabled);
-    });
-  }
-
   // Track Fullscreen state
   document.addEventListener('fullscreenchange', () => {
     const isFull = !!document.fullscreenElement;
@@ -2514,9 +2502,6 @@
     }
     if (videoCornerChatBtn) {
       videoCornerChatBtn.style.display = isFull ? 'flex' : 'none';
-    }
-    if (ctrlOverlayChatBtn) {
-      ctrlOverlayChatBtn.style.display = isFull ? 'inline-flex' : 'none';
     }
 
     if (isFull) {
@@ -2683,10 +2668,6 @@
   if (videoCornerChatBtn) {
     videoCornerChatBtn.classList.add('active');
     videoCornerChatBtn.style.display = 'none';
-  }
-  if (ctrlOverlayChatBtn) {
-    ctrlOverlayChatBtn.classList.add('overlay-chat-active');
-    ctrlOverlayChatBtn.style.display = 'none';
   }
   if (floatingChatOverlay) {
     floatingChatOverlay.classList.add('lum-dark-scene');

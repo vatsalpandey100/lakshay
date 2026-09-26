@@ -1315,24 +1315,12 @@ video::cue {
   pointer-events: auto;
 }
 
-/* Control bar chat button: hidden in normal mode (sidebar has chat), only in fullscreen */
-#ctrl-overlay-chat-btn {
-  display: none !important;
-}
-
-/* ONLY display corner chat button & control bar chat button in Fullscreen or Maximized mode */
+/* ONLY display corner chat button in Fullscreen or Maximized mode */
 .video-player-wrapper:fullscreen .video-corner-chat-btn,
 .video-player-wrapper:-webkit-full-screen .video-corner-chat-btn,
 .video-player-wrapper.is-fullscreen .video-corner-chat-btn,
 .video-player-wrapper.is-maximized .video-corner-chat-btn {
   display: flex !important;
-}
-
-.video-player-wrapper:fullscreen #ctrl-overlay-chat-btn,
-.video-player-wrapper:-webkit-full-screen #ctrl-overlay-chat-btn,
-.video-player-wrapper.is-fullscreen #ctrl-overlay-chat-btn,
-.video-player-wrapper.is-maximized #ctrl-overlay-chat-btn {
-  display: inline-flex !important;
 }
 
 /* Slightly brighter on hover or when controls are active in fullscreen */
