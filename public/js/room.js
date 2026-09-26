@@ -1296,14 +1296,11 @@
   document.getElementById('btn-force-sync')?.addEventListener('click', resyncAction);
   syncBeaconBtn?.addEventListener('click', resyncAction);
 
-  // Fullscreen & PIP
+  // Fullscreen & Mobile Viewport Maximization
   if (fullscreenBtn) {
-    fullscreenBtn.addEventListener('click', () => {
-      if (!document.fullscreenElement) {
-        playerWrapper.requestFullscreen().catch(() => {});
-      } else {
-        document.exitFullscreen().catch(() => {});
-      }
+    fullscreenBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleFullscreen();
     });
   }
 
@@ -2590,18 +2587,73 @@
     });
   }
 
-  // Track Fullscreen state
-  document.addEventListener('fullscreenchange', () => {
-    const isFull = !!document.fullscreenElement;
-    if (playerWrapper) {
-      playerWrapper.classList.toggle('is-fullscreen', isFull);
+  // Fullscreen Engine (Cross-platform standard + iOS mobile pseudo-fullscreen)
+  function toggleFullscreen() {
+    const isCurrentlyFull = isPlayerMaximizedOrFullscreen();
+
+    if (!isCurrentlyFull) {
+      // Enter Fullscreen
+      const req = playerWrapper?.requestFullscreen ||
+                  playerWrapper?.webkitRequestFullscreen ||
+                  playerWrapper?.mozRequestFullScreen ||
+                  playerWrapper?.msRequestFullscreen;
+
+      if (typeof req === 'function') {
+        try {
+          const promise = req.call(playerWrapper);
+          if (promise && promise.catch) {
+            promise.catch(() => {
+              enterCssFullscreen();
+            });
+          }
+        } catch (err) {
+          enterCssFullscreen();
+        }
+      } else {
+        enterCssFullscreen();
+      }
+    } else {
+      // Exit Fullscreen
+      const exit = document.exitFullscreen ||
+                   document.webkitExitFullscreen ||
+                   document.mozCancelFullScreen ||
+                   document.msExitFullscreen;
+
+      if (document.fullscreenElement || document.webkitFullscreenElement) {
+        if (typeof exit === 'function') {
+          try {
+            const promise = exit.call(document);
+            if (promise && promise.catch) promise.catch(() => {});
+          } catch (e) {}
+        }
+      }
+      exitCssFullscreen();
     }
+  }
+
+  function enterCssFullscreen() {
+    if (!playerWrapper) return;
+    playerWrapper.classList.add('is-fullscreen');
+    updateFullscreenUi(true);
+  }
+
+  function exitCssFullscreen() {
+    if (!playerWrapper) return;
+    playerWrapper.classList.remove('is-fullscreen');
+    updateFullscreenUi(false);
+  }
+
+  function updateFullscreenUi(isFull) {
     if (fullscreenBtn) {
-      const icon = fullscreenBtn.querySelector('#fullscreen-icon') || fullscreenBtn;
-      icon.textContent = isFull ? '🗗' : '⛶';
+      const enterIcon = fullscreenBtn.querySelector('.fs-icon-enter');
+      const exitIcon = fullscreenBtn.querySelector('.fs-icon-exit');
+      if (enterIcon && exitIcon) {
+        enterIcon.style.display = isFull ? 'none' : 'block';
+        exitIcon.style.display = isFull ? 'block' : 'none';
+      }
+      fullscreenBtn.title = isFull ? 'Exit Fullscreen' : 'Fullscreen (F)';
     }
 
-    // On-video floating messages & corner chat button are ONLY for fullscreen / maximized mode!
     if (floatingChatOverlay) {
       floatingChatOverlay.style.display = (isFull && isOverlayChatEnabled) ? 'flex' : 'none';
     }
@@ -2613,15 +2665,22 @@
       showControls(3000);
       syncRecentOverlayMessages();
     } else {
-      // Clean up floating chat form and stream on exiting fullscreen
-      if (floatingQuickChatForm) {
-        floatingQuickChatForm.style.display = 'none';
-      }
-      if (floatingChatStream) {
-        floatingChatStream.innerHTML = '';
-      }
+      if (floatingQuickChatForm) floatingQuickChatForm.style.display = 'none';
+      if (floatingChatStream) floatingChatStream.innerHTML = '';
     }
-  });
+  }
+
+  // Track Fullscreen state changes (HTML5 Fullscreen API & WebKit)
+  const onFullscreenChange = () => {
+    const isFull = !!(document.fullscreenElement || document.webkitFullscreenElement);
+    if (playerWrapper) {
+      playerWrapper.classList.toggle('is-fullscreen', isFull);
+    }
+    updateFullscreenUi(isFull);
+  };
+
+  document.addEventListener('fullscreenchange', onFullscreenChange);
+  document.addEventListener('webkitfullscreenchange', onFullscreenChange);
 
   // Populate recent messages into overlay stream when entering fullscreen (strictly last 45s)
   function syncRecentOverlayMessages() {

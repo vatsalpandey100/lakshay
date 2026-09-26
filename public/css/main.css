@@ -935,6 +935,7 @@ body {
   justify-content: center !important;
   position: fixed !important;
   inset: 0 !important;
+  z-index: 99999 !important;
 }
 
 .video-player-wrapper:fullscreen .video-viewport,
@@ -2790,13 +2791,25 @@ video::cue {
     flex-shrink: 0 !important;
   }
 
-  #ctrl-fullscreen-btn {
-    width: 32px !important;
-    height: 32px !important;
+  #ctrl-fullscreen-btn,
+  .ctrl-fullscreen-btn {
+    width: 34px !important;
+    height: 34px !important;
     flex-shrink: 0 !important;
-    display: flex !important;
+    display: inline-flex !important;
     align-items: center !important;
     justify-content: center !important;
+    background: rgba(255, 255, 255, 0.12) !important;
+    border: 1px solid rgba(255, 255, 255, 0.22) !important;
+    border-radius: var(--radius-sm) !important;
+    color: #ffffff !important;
+    cursor: pointer !important;
+  }
+
+  #ctrl-fullscreen-btn:active,
+  #ctrl-fullscreen-btn:hover {
+    background: rgba(139, 92, 246, 0.35) !important;
+    border-color: var(--accent-purple) !important;
   }
 
   .time-display {
