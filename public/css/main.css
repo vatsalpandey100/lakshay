@@ -1034,7 +1034,8 @@ video::cue {
 .video-floating-chat-overlay {
   position: absolute;
   right: 22px;
-  bottom: 24px;
+  /* Lifted up cleanly above the corner chat button (which sits at bottom: 20px with 38px height) */
+  bottom: 72px;
   max-width: min(390px, 44vw);
   pointer-events: none;
   z-index: 22;
@@ -1060,9 +1061,9 @@ video::cue {
   display: flex !important;
 }
 
-/* Smart lift: When controls are shown (hovering bottom 1/10th), elevate chat overlay smoothly */
+/* Smart lift: When controls are shown (hovering bottom 1/10th), elevate chat overlay smoothly above controls & corner button */
 .video-player-wrapper.show-controls .video-floating-chat-overlay {
-  bottom: 88px;
+  bottom: 136px;
 }
 
 .floating-chat-stream {

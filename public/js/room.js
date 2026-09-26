@@ -2577,28 +2577,11 @@
     row.className = 'floating-msg-row';
     row.dataset.msgId = msg.id || String(Date.now());
 
-    const hasVideoTime = typeof msg.videoTime === 'number' && msg.videoTime >= 0;
-    const tsHtml = hasVideoTime ? `
-      <button type="button" class="chat-video-ts-badge floating-ts" data-seek-time="${msg.videoTime}" title="Jump to ${formatTime(msg.videoTime)}">
-        ▶ ${formatTime(msg.videoTime)}
-      </button>
-    ` : '';
-
     row.innerHTML = `
       <span class="floating-msg-avatar">${renderAvatar(msg.user?.avatar)}</span>
       <span class="floating-msg-author ${isYou ? 'is-you' : ''}">${escapeHtml(msg.user?.username || 'Guest')}:</span>
-      <span class="floating-msg-text">${formatChatMessageWithTimestamps(msg.text)}</span>
-      ${tsHtml}
+      <span class="floating-msg-text">${escapeHtml(msg.text)}</span>
     `;
-
-    // Make timestamp badges clickable in floating messages
-    row.querySelectorAll('.chat-video-ts-badge').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const target = parseFloat(btn.dataset.seekTime);
-        jumpToTimestamp(target);
-      });
-    });
 
     floatingChatStream.appendChild(row);
 
