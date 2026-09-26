@@ -890,6 +890,48 @@ body {
   transform: scale(1.15);
 }
 
+/* ─── Fullscreen: fill the entire viewport ─── */
+.video-player-wrapper:fullscreen,
+.video-player-wrapper:-webkit-full-screen,
+.video-player-wrapper.is-fullscreen {
+  width: 100vw !important;
+  height: 100vh !important;
+  max-width: 100vw !important;
+  max-height: 100vh !important;
+  aspect-ratio: unset !important;
+  border-radius: 0 !important;
+  border: none !important;
+  box-shadow: none !important;
+  background: #000 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  position: fixed !important;
+  inset: 0 !important;
+}
+
+.video-player-wrapper:fullscreen .video-viewport,
+.video-player-wrapper:-webkit-full-screen .video-viewport,
+.video-player-wrapper.is-fullscreen .video-viewport {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.video-player-wrapper:fullscreen #html5-player,
+.video-player-wrapper:-webkit-full-screen #html5-player,
+.video-player-wrapper.is-fullscreen #html5-player {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: contain !important;
+}
+
+.video-player-wrapper:fullscreen #youtube-player-frame,
+.video-player-wrapper:-webkit-full-screen #youtube-player-frame,
+.video-player-wrapper.is-fullscreen #youtube-player-frame {
+  width: 100% !important;
+  height: 100% !important;
+}
+
 /* Video Cursor Autohide */
 .video-player-wrapper.hide-cursor {
   cursor: none;
