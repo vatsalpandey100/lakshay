@@ -1330,8 +1330,10 @@
     }
   }
 
-  // Presets Loading
-  fetchPresets();
+  // Presets Loading (only if container is in DOM)
+  if (document.getElementById('preset-cards-container')) {
+    fetchPresets();
+  }
   async function fetchPresets() {
     try {
       const res = await fetch('/api/presets');
