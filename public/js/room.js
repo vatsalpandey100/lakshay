@@ -265,12 +265,14 @@
     });
 
     socket.on('user-joined', ({ user, users, message }) => {
+      if (roomState && Array.isArray(users)) roomState.users = users;
       renderMembers(users);
       appendChatMessage(message);
       playUiTone('join');
     });
 
     socket.on('user-left', ({ users, message }) => {
+      if (roomState && Array.isArray(users)) roomState.users = users;
       renderMembers(users);
       appendChatMessage(message);
     });
@@ -364,7 +366,10 @@
     });
 
     socket.on('host-transferred', ({ hostId, users, message }) => {
-      if (roomState) roomState.hostId = hostId;
+      if (roomState) {
+        roomState.hostId = hostId;
+        if (Array.isArray(users)) roomState.users = users;
+      }
       if (currentUser) currentUser.isHost = hostId === socket.id;
       const hostLockCheckbox = document.getElementById('setting-host-lock');
       if (hostLockCheckbox) hostLockCheckbox.disabled = !currentUser.isHost;
@@ -2328,14 +2333,27 @@
       });
     }
 
-    const users = (roomState && roomState.users) ? roomState.users : [];
+    const myName = (currentUser?.username || '').trim().toLowerCase();
+    const mySocketId = currentUser?.socketId || (socket ? socket.id : null);
+
+    const users = (roomState && Array.isArray(roomState.users)) ? roomState.users : [];
     users.forEach(u => {
-      if (!query || u.username.toLowerCase().includes(query)) {
-        suggestions.push({
-          username: u.username,
-          avatar: u.avatar,
-          badge: u.isHost ? 'Host' : ''
-        });
+      if (!u || !u.username) return;
+      const uName = u.username.trim();
+      const uLower = uName.toLowerCase();
+
+      // Exclude yourself (nobody tags themselves!)
+      if (myName && uLower === myName) return;
+      if (mySocketId && u.socketId === mySocketId) return;
+
+      if (!query || uLower.includes(query)) {
+        if (!suggestions.some(s => s.username.toLowerCase() === uLower)) {
+          suggestions.push({
+            username: uName,
+            avatar: u.avatar || '👤',
+            badge: u.isHost ? 'Host' : ''
+          });
+        }
       }
     });
 
@@ -2357,10 +2375,13 @@
         ${item.badge ? `<span class="mention-item-badge">${item.badge}</span>` : ''}
       `;
 
-      btn.addEventListener('mousedown', (e) => {
+      const doSelect = (e) => {
         e.preventDefault();
+        e.stopPropagation();
         insertMention(item.username);
-      });
+      };
+      btn.addEventListener('mousedown', doSelect);
+      btn.addEventListener('touchstart', doSelect, { passive: false });
 
       mentionList.appendChild(btn);
     });
@@ -2933,9 +2954,13 @@
 
   // Members Rendering
   function renderMembers(users) {
+    if (Array.isArray(users)) {
+      if (!roomState) roomState = {};
+      roomState.users = users;
+    }
     if (!membersItemsList) return;
     const badge = document.getElementById('member-count-badge');
-    if (badge) badge.textContent = users.length;
+    if (badge && Array.isArray(users)) badge.textContent = users.length;
 
     membersItemsList.innerHTML = users.map(user => {
       const isYou = currentUser && user.socketId === currentUser.socketId;
