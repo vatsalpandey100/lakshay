@@ -4,25 +4,32 @@ document.addEventListener('DOMContentLoaded', () => {
   setupAvatarSelector('create-avatar-grid');
   setupAvatarSelector('join-avatar-grid');
 
-  // Load existing username/avatar from localStorage if previously used
-  const savedName = localStorage.getItem('syncpulse_username');
+  // Load existing avatar from localStorage if previously used
   const savedAvatar = localStorage.getItem('syncpulse_avatar');
 
+  // Remove prefilled 'Vatsal' or default name so the input is completely clean
+  let savedName = localStorage.getItem('syncpulse_username');
+  if (savedName && (savedName.trim().toLowerCase() === 'vatsal' || savedName.trim().toLowerCase() === 'lakshay')) {
+    localStorage.removeItem('syncpulse_username');
+    savedName = null;
+  }
+  const cleanSavedName = savedName || '';
+
   const createNameInput = document.getElementById('create-user-name');
-  if (createNameInput && !createNameInput.value) {
-    createNameInput.value = savedName || 'Vatsal';
+  if (createNameInput) {
+    createNameInput.value = cleanSavedName;
   }
 
-  if (savedName) {
-    const joinNameInput = document.getElementById('join-user-name');
-    if (joinNameInput) joinNameInput.value = savedName;
+  const joinNameInput = document.getElementById('join-user-name');
+  if (joinNameInput) {
+    joinNameInput.value = cleanSavedName;
   }
 
   if (savedAvatar) {
     selectAvatar('create-avatar-grid', savedAvatar);
     selectAvatar('join-avatar-grid', savedAvatar);
   } else {
-    selectAvatar('create-avatar-grid', '👑');
+    selectAvatar('create-avatar-grid', '🍿');
   }
 
   // Handle Create Room
@@ -30,8 +37,13 @@ document.addEventListener('DOMContentLoaded', () => {
   createForm.addEventListener('submit', (e) => {
     e.preventDefault();
     const roomName = document.getElementById('create-room-name').value.trim() || 'Anime Cinema Party';
-    const username = document.getElementById('create-user-name').value.trim() || 'Vatsal';
-    const avatar = getSelectedAvatar('create-avatar-grid') || '👑';
+    const username = document.getElementById('create-user-name').value.trim();
+    if (!username) {
+      showToast('Please enter your nickname!');
+      document.getElementById('create-user-name')?.focus();
+      return;
+    }
+    const avatar = getSelectedAvatar('create-avatar-grid') || '🍿';
 
     // Save profile
     localStorage.setItem('syncpulse_username', username);
