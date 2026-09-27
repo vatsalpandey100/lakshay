@@ -2579,6 +2579,7 @@
       };
       btn.addEventListener('mousedown', doSelect);
       btn.addEventListener('touchstart', doSelect, { passive: false });
+      btn.addEventListener('click', doSelect);
 
       mentionList.appendChild(btn);
     });
