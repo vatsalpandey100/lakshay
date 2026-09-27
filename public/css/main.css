@@ -1298,27 +1298,6 @@ video::cue {
   box-shadow: 0 0 14px rgba(124, 58, 237, 0.5);
 }
 
-.floating-chat-send-btn {
-  flex-shrink: 0;
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  background: var(--accent-primary);
-  border: none;
-  color: #fff;
-  font-size: 1rem;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: background 0.2s ease, transform 0.15s ease;
-  pointer-events: auto;
-}
-
-.floating-chat-send-btn:hover {
-  background: #6d28d9;
-  transform: scale(1.1);
-}
 
 /* Compact Corner Chat Control (Floating in Bottom-Right Corner of Video) */
 .video-corner-chat-btn {

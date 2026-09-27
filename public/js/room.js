@@ -2757,6 +2757,10 @@
     if (floatingChatOverlay) {
       floatingChatOverlay.style.display = (enabled && isMax) ? 'flex' : 'none';
     }
+    if (!enabled && floatingQuickChatForm) {
+      floatingQuickChatForm.style.display = 'none';
+      floatingQuickChatInput?.blur();
+    }
     if (videoCornerChatBtn) {
       videoCornerChatBtn.classList.toggle('active', enabled);
     }
@@ -2768,13 +2772,27 @@
     }
   }
 
-  // Corner chat button: opens quick chat input to type; if hidden, shows it first
+  // Corner chat button: tap to open/show msg; tap again to hide msg
   if (videoCornerChatBtn) {
+    // Prevent premature focus loss / blur conflict on touch devices
+    videoCornerChatBtn.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+    });
+
     videoCornerChatBtn.addEventListener('click', (e) => {
       e.stopPropagation();
-      if (!isOverlayChatEnabled) {
-        setOverlayChatEnabled(true);
+      const isFormOpen = floatingQuickChatForm && floatingQuickChatForm.style.display === 'flex';
+
+      if (isFormOpen || isOverlayChatEnabled) {
+        // Chat or message input is currently showing: tap msg icon again to hide
+        if (floatingQuickChatForm) {
+          floatingQuickChatForm.style.display = 'none';
+          floatingQuickChatInput?.blur();
+        }
+        setOverlayChatEnabled(false);
       } else {
+        // Chat is hidden: tap msg icon to show messages and open quick input
+        setOverlayChatEnabled(true);
         if (floatingQuickChatForm && floatingQuickChatInput) {
           floatingQuickChatForm.style.display = 'flex';
           floatingQuickChatInput.focus();
