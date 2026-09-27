@@ -377,6 +377,16 @@
       }, 1500);
     });
 
+    socket.on('user-removed', ({ by, reason }) => {
+      showToast(`🚫 ${reason || 'You were removed from the room by the host.'}`, 'error');
+      sessionStorage.removeItem('syncpulse_host_token');
+      sessionStorage.removeItem('syncpulse_is_creating');
+      if (socket) socket.disconnect();
+      setTimeout(() => {
+        window.location.href = '/?removed=true';
+      }, 1600);
+    });
+
     socket.on('sync-playback', (data) => {
       handleServerPlaybackSync(data);
     });
@@ -3121,6 +3131,15 @@
         }
       }
 
+      // Option to remove / kick user for host/admin
+      if (amIHost && !isYou && !isVatsal) {
+        hostControlsHtml += `
+          <button type="button" class="btn-remove-user" data-socket-id="${user.socketId}" data-username="${escapeHtml(user.username)}" title="Remove ${escapeHtml(user.username)} from party">
+            ✕ Remove
+          </button>
+        `;
+      }
+
       return `
         <div class="member-item">
           <div class="member-info">
@@ -3133,7 +3152,7 @@
               <div style="font-size: 0.7rem; color: var(--accent-emerald);">● Online</div>
             </div>
           </div>
-          <div style="display: flex; align-items: center; gap: 0.5rem;">
+          <div style="display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap;">
             ${hostControlsHtml}
           </div>
         </div>
@@ -3146,6 +3165,18 @@
         const makeHost = btn.dataset.makeHost === 'true';
         if (socket && sid) {
           socket.emit('toggle-co-host', { targetSocketId: sid, makeHost });
+        }
+      });
+    });
+
+    membersItemsList.querySelectorAll('.btn-remove-user').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const sid = btn.dataset.socketId;
+        const targetName = btn.dataset.username || 'this user';
+        if (!sid || !socket) return;
+        if (confirm(`Are you sure you want to remove ${targetName} from the watch party?`)) {
+          socket.emit('remove-user', { targetSocketId: sid });
         }
       });
     });

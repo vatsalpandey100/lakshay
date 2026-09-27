@@ -853,6 +853,65 @@ io.on('connection', (socket) => {
     }
   });
 
+  // Remove / Kick User from Room (Host/Admin only)
+  socket.on('remove-user', ({ targetSocketId, reason }) => {
+    if (!currentRoomId || !rooms.has(currentRoomId)) return;
+    const room = rooms.get(currentRoomId);
+    const caller = currentUser || room.users.get(socket.id);
+
+    if (!isUserHost(room, socket.id, caller?.username)) {
+      socket.emit('error-msg', { message: 'Only hosts and admins can remove users from the room.' });
+      return;
+    }
+
+    if (!targetSocketId || !room.users.has(targetSocketId)) return;
+    const targetUser = room.users.get(targetSocketId);
+
+    // Prevent kicking Vatsal
+    if ((targetUser.username || '').trim().toLowerCase() === 'vatsal') {
+      socket.emit('error-msg', { message: 'Vatsal is the sovereign admin and cannot be removed.' });
+      return;
+    }
+
+    // Prevent removing self via kick
+    if (targetSocketId === socket.id) {
+      socket.emit('error-msg', { message: 'Use leave room button to leave the party.' });
+      return;
+    }
+
+    room.users.delete(targetSocketId);
+    if (room.hostIds) room.hostIds.delete(targetSocketId);
+    if (room.coHostUsernames && targetUser.username) {
+      room.coHostUsernames.delete(targetUser.username.trim().toLowerCase());
+    }
+
+    const kickMsg = {
+      id: `sys-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+      system: true,
+      text: `🚫 ${targetUser.username} was removed from the party by ${caller?.username || 'Host'}.`,
+      timestamp: Date.now()
+    };
+    room.messages.push(kickMsg);
+    savePersistedMessages(currentRoomId, room.messages);
+
+    // Send target socket kick event and remove from room
+    const targetSocket = io.sockets.sockets.get(targetSocketId);
+    if (targetSocket) {
+      targetSocket.emit('user-removed', {
+        by: caller?.username || 'Host',
+        reason: reason || `You were removed from the room by ${caller?.username || 'Host'}.`
+      });
+      targetSocket.leave(currentRoomId);
+    }
+
+    // Broadcast updated user list to everyone remaining
+    io.to(currentRoomId).emit('user-left', {
+      socketId: targetSocketId,
+      users: Array.from(room.users.values()),
+      message: kickMsg
+    });
+  });
+
   // End session (for all if host, or individual leave)
   socket.on('end-session', () => {
     if (!currentRoomId || !rooms.has(currentRoomId)) return;
