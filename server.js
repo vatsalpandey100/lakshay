@@ -134,6 +134,7 @@ function getOrCreateRoom(roomId, roomName = null) {
         playbackRate: 1.0
       },
       queue: [],
+      reactionCounts: {},
       users: new Map(), // socketId -> userData
       messages: savedMessages && savedMessages.length > 0 ? savedMessages : [
         {
@@ -414,6 +415,7 @@ io.on('connection', (socket) => {
           currentTime: accurateTime
         },
         queue: room.queue,
+        reactionCounts: room.reactionCounts || {},
         users: Array.from(room.users.values()),
         messages: room.messages.slice(-100)
       },
@@ -718,8 +720,16 @@ io.on('connection', (socket) => {
   // Floating Reaction
   socket.on('send-reaction', ({ emoji }) => {
     if (!currentRoomId || !emoji) return;
+    const room = rooms.get(currentRoomId);
+    let count = 1;
+    if (room) {
+      if (!room.reactionCounts) room.reactionCounts = {};
+      room.reactionCounts[emoji] = (room.reactionCounts[emoji] || 0) + 1;
+      count = room.reactionCounts[emoji];
+    }
     io.to(currentRoomId).emit('floating-reaction', {
       emoji,
+      count,
       sender: currentUser ? currentUser.username : 'Someone',
       id: `react-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`
     });

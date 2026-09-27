@@ -309,6 +309,18 @@
       renderMembers(roomState.users);
       loadVideoSource(roomState.currentVideo, roomState.playback.currentTime, roomState.playback.state === 'playing');
 
+      // Sync reaction counts from room state
+      if (data.room.reactionCounts) {
+        for (const [em, cnt] of Object.entries(data.room.reactionCounts)) {
+          const btn = document.querySelector(`.reaction-bar [data-emoji="${em}"]`);
+          const countEl = btn?.querySelector('.react-count');
+          if (countEl) {
+            countEl.textContent = cnt;
+            if (cnt > 0) btn.classList.add('has-bumped');
+          }
+        }
+      }
+
       // Periodic sync check & NTP time synchronization
       if (syncInterval) clearInterval(syncInterval);
       syncInterval = setInterval(() => {
@@ -440,7 +452,7 @@
 
     socket.on('floating-reaction', (data) => {
       spawnFloatingReaction(data.emoji);
-      triggerReactionPill(data.emoji);
+      triggerReactionPill(data.emoji, data.count);
       playUiTone('pop');
     });
 
@@ -1832,7 +1844,7 @@
   }
 
   // Anime Reaction Bar Functionality
-  function triggerReactionPill(emoji) {
+  function triggerReactionPill(emoji, newCount) {
     if (!emoji) return;
     const btn = document.querySelector(`.reaction-bar [data-emoji="${emoji}"]`);
     if (btn) {
@@ -1842,8 +1854,12 @@
       btn.classList.add('pill-bump', 'has-bumped');
       const countEl = btn.querySelector('.react-count');
       if (countEl) {
-        const cur = parseInt(countEl.textContent || '0', 10) || 0;
-        countEl.textContent = cur + 1;
+        if (typeof newCount === 'number') {
+          countEl.textContent = newCount;
+        } else {
+          const cur = parseInt(countEl.textContent || '0', 10) || 0;
+          countEl.textContent = cur + 1;
+        }
       }
     }
   }
