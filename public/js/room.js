@@ -2582,10 +2582,118 @@
     scrollChatToBottom();
   }
 
-  // Detect typing & @ mention trigger in chat input
-  if (chatInput) {
-    chatInput.addEventListener('input', () => {
-      const val = chatInput.value;
+  // Universal @ Mention Autocomplete Setup Engine (Supports both sidebar and fullscreen overlay)
+  function setupMentionAutocomplete(targetInput, targetMenu, targetList) {
+    if (!targetInput || !targetMenu || !targetList) return null;
+
+    let targetSelectedIndex = 0;
+    let targetMentionMatch = null;
+
+    function closeTargetMenu() {
+      targetMenu.style.display = 'none';
+      targetMentionMatch = null;
+    }
+
+    function insertTargetMention(username) {
+      if (!targetMentionMatch) return;
+      const text = targetInput.value;
+      const before = text.substring(0, targetMentionMatch.startPos);
+      const after = text.substring(targetMentionMatch.endPos);
+      const mentionTag = `@${username} `;
+      targetInput.value = before + mentionTag + after;
+      const nextCursor = before.length + mentionTag.length;
+      targetInput.focus();
+      targetInput.setSelectionRange(nextCursor, nextCursor);
+      closeTargetMenu();
+    }
+
+    function handleInputMention() {
+      const text = targetInput.value;
+      const cursorPos = targetInput.selectionStart;
+      const beforeCursor = text.substring(0, cursorPos);
+      const match = beforeCursor.match(/@([a-zA-Z0-9_\u00C0-\u017F]*)$/);
+
+      if (!match) {
+        closeTargetMenu();
+        return;
+      }
+
+      const query = match[1].toLowerCase();
+      targetMentionMatch = {
+        startPos: match.index,
+        endPos: cursorPos
+      };
+
+      const suggestions = [];
+
+      // Add @everyone / @all if matching
+      if (!query || 'everyone'.startsWith(query) || 'all'.startsWith(query)) {
+        suggestions.push({
+          username: 'everyone',
+          avatar: '📢',
+          badge: 'All'
+        });
+      }
+
+      const myName = (currentUser?.username || '').trim().toLowerCase();
+      const mySocketId = currentUser?.socketId || (socket ? socket.id : null);
+
+      const users = (roomState && Array.isArray(roomState.users)) ? roomState.users : [];
+      users.forEach(u => {
+        if (!u || !u.username) return;
+        const uName = u.username.trim();
+        const uLower = uName.toLowerCase();
+
+        // Exclude yourself (nobody tags themselves!)
+        if (myName && uLower === myName) return;
+        if (mySocketId && u.socketId === mySocketId) return;
+
+        if (!query || uLower.includes(query)) {
+          if (!suggestions.some(s => s.username.toLowerCase() === uLower)) {
+            suggestions.push({
+              username: uName,
+              avatar: u.avatar || '👤',
+              badge: u.isHost ? 'Host' : ''
+            });
+          }
+        }
+      });
+
+      if (suggestions.length === 0) {
+        closeTargetMenu();
+        return;
+      }
+
+      targetList.innerHTML = '';
+      targetSelectedIndex = 0;
+
+      suggestions.forEach((item, index) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = `mention-item ${index === 0 ? 'active' : ''}`;
+        btn.innerHTML = `
+          <span class="mention-item-avatar">${renderAvatar(item.avatar)}</span>
+          <span class="mention-item-name">@${escapeHtml(item.username)}</span>
+          ${item.badge ? `<span class="mention-item-badge">${item.badge}</span>` : ''}
+        `;
+
+        const doSelect = (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          insertTargetMention(item.username);
+        };
+        btn.addEventListener('mousedown', doSelect);
+        btn.addEventListener('touchstart', doSelect, { passive: false });
+        btn.addEventListener('click', doSelect);
+
+        targetList.appendChild(btn);
+      });
+
+      targetMenu.style.display = 'block';
+    }
+
+    targetInput.addEventListener('input', () => {
+      const val = targetInput.value;
       if (val.trim().length > 0) {
         if (!isCurrentlyTyping && socket && socket.connected) {
           isCurrentlyTyping = true;
@@ -2605,150 +2713,57 @@
         }
       }
 
-      handleMentionAutocomplete();
+      handleInputMention();
     });
 
-    chatInput.addEventListener('blur', () => {
+    targetInput.addEventListener('blur', () => {
       setTimeout(() => {
-        closeMentionMenu();
+        closeTargetMenu();
       }, 250);
     });
 
-    chatInput.addEventListener('keydown', (e) => {
-      if (mentionMenu && mentionMenu.style.display === 'block') {
-        const items = mentionList.querySelectorAll('.mention-item');
+    targetInput.addEventListener('keydown', (e) => {
+      if (targetMenu && targetMenu.style.display === 'block') {
+        const items = targetList.querySelectorAll('.mention-item');
         if (items.length > 0) {
           if (e.key === 'ArrowDown') {
             e.preventDefault();
-            mentionSelectedIndex = (mentionSelectedIndex + 1) % items.length;
-            items.forEach((it, i) => it.classList.toggle('active', i === mentionSelectedIndex));
-            items[mentionSelectedIndex]?.scrollIntoView({ block: 'nearest' });
+            e.stopPropagation();
+            targetSelectedIndex = (targetSelectedIndex + 1) % items.length;
+            items.forEach((it, i) => it.classList.toggle('active', i === targetSelectedIndex));
+            items[targetSelectedIndex]?.scrollIntoView({ block: 'nearest' });
             return;
           } else if (e.key === 'ArrowUp') {
             e.preventDefault();
-            mentionSelectedIndex = (mentionSelectedIndex - 1 + items.length) % items.length;
-            items.forEach((it, i) => it.classList.toggle('active', i === mentionSelectedIndex));
-            items[mentionSelectedIndex]?.scrollIntoView({ block: 'nearest' });
+            e.stopPropagation();
+            targetSelectedIndex = (targetSelectedIndex - 1 + items.length) % items.length;
+            items.forEach((it, i) => it.classList.toggle('active', i === targetSelectedIndex));
+            items[targetSelectedIndex]?.scrollIntoView({ block: 'nearest' });
             return;
           } else if (e.key === 'Enter' || e.key === 'Tab') {
-            if (items[mentionSelectedIndex]) {
+            if (items[targetSelectedIndex]) {
               e.preventDefault();
-              items[mentionSelectedIndex].click();
+              e.stopPropagation();
+              items[targetSelectedIndex].click();
               return;
             }
           } else if (e.key === 'Escape') {
             e.preventDefault();
-            closeMentionMenu();
+            e.stopPropagation();
+            closeTargetMenu();
             return;
           }
         }
       }
     });
-  }
 
-  function handleMentionAutocomplete() {
-    if (!mentionMenu || !mentionList || !chatInput) return;
-    const text = chatInput.value;
-    const cursorPos = chatInput.selectionStart;
-    const beforeCursor = text.substring(0, cursorPos);
-    const match = beforeCursor.match(/@([a-zA-Z0-9_\u00C0-\u017F]*)$/);
-
-    if (!match) {
-      closeMentionMenu();
-      return;
-    }
-
-    const query = match[1].toLowerCase();
-    activeMentionMatch = {
-      startPos: match.index,
-      endPos: cursorPos
+    return {
+      close: closeTargetMenu,
+      isOpen: () => targetMenu && targetMenu.style.display === 'block'
     };
-
-    const suggestions = [];
-
-    // Add @everyone / @all if matching
-    if (!query || 'everyone'.startsWith(query) || 'all'.startsWith(query)) {
-      suggestions.push({
-        username: 'everyone',
-        avatar: '📢',
-        badge: 'All'
-      });
-    }
-
-    const myName = (currentUser?.username || '').trim().toLowerCase();
-    const mySocketId = currentUser?.socketId || (socket ? socket.id : null);
-
-    const users = (roomState && Array.isArray(roomState.users)) ? roomState.users : [];
-    users.forEach(u => {
-      if (!u || !u.username) return;
-      const uName = u.username.trim();
-      const uLower = uName.toLowerCase();
-
-      // Exclude yourself (nobody tags themselves!)
-      if (myName && uLower === myName) return;
-      if (mySocketId && u.socketId === mySocketId) return;
-
-      if (!query || uLower.includes(query)) {
-        if (!suggestions.some(s => s.username.toLowerCase() === uLower)) {
-          suggestions.push({
-            username: uName,
-            avatar: u.avatar || '👤',
-            badge: u.isHost ? 'Host' : ''
-          });
-        }
-      }
-    });
-
-    if (suggestions.length === 0) {
-      closeMentionMenu();
-      return;
-    }
-
-    mentionList.innerHTML = '';
-    mentionSelectedIndex = 0;
-
-    suggestions.forEach((item, index) => {
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = `mention-item ${index === 0 ? 'active' : ''}`;
-      btn.innerHTML = `
-        <span class="mention-item-avatar">${renderAvatar(item.avatar)}</span>
-        <span class="mention-item-name">@${escapeHtml(item.username)}</span>
-        ${item.badge ? `<span class="mention-item-badge">${item.badge}</span>` : ''}
-      `;
-
-      const doSelect = (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        insertMention(item.username);
-      };
-      btn.addEventListener('mousedown', doSelect);
-      btn.addEventListener('touchstart', doSelect, { passive: false });
-      btn.addEventListener('click', doSelect);
-
-      mentionList.appendChild(btn);
-    });
-
-    mentionMenu.style.display = 'block';
   }
 
-  function insertMention(username) {
-    if (!activeMentionMatch || !chatInput) return;
-    const text = chatInput.value;
-    const before = text.substring(0, activeMentionMatch.startPos);
-    const after = text.substring(activeMentionMatch.endPos);
-    const mentionTag = `@${username} `;
-    chatInput.value = before + mentionTag + after;
-    const nextCursor = before.length + mentionTag.length;
-    chatInput.focus();
-    chatInput.setSelectionRange(nextCursor, nextCursor);
-    closeMentionMenu();
-  }
-
-  function closeMentionMenu() {
-    if (mentionMenu) mentionMenu.style.display = 'none';
-    activeMentionMatch = null;
-  }
+  const sidebarMentionController = setupMentionAutocomplete(chatInput, mentionMenu, mentionList);
 
   if (chatForm) {
     chatForm.addEventListener('submit', (e) => {
@@ -3115,14 +3130,21 @@
     const wasNearBottom = (floatingChatStream.scrollHeight - floatingChatStream.scrollTop - floatingChatStream.clientHeight) < 75;
     const isYou = currentUser && msg.user && msg.user.socketId === currentUser.socketId;
 
+    const myName = currentUser?.username ? currentUser.username.toLowerCase() : '';
+    const hasMentionMe = myName && msg.text && (
+      msg.text.toLowerCase().includes(`@${myName}`) ||
+      msg.text.toLowerCase().includes('@everyone') ||
+      msg.text.toLowerCase().includes('@all')
+    );
+
     const row = document.createElement('div');
-    row.className = 'floating-msg-row';
+    row.className = `floating-msg-row ${hasMentionMe && !isYou ? 'has-mention-me' : ''}`.trim();
     row.dataset.msgId = msg.id || String(Date.now());
 
     row.innerHTML = `
       <span class="floating-msg-avatar">${renderAvatar(msg.user?.avatar)}</span>
       <span class="floating-msg-author ${isYou ? 'is-you' : ''}">${escapeHtml(msg.user?.username || 'Guest')}:</span>
-      <span class="floating-msg-text">${escapeHtml(msg.text)}</span>
+      <span class="floating-msg-text">${formatChatMessageWithTimestamps(msg.text)}</span>
     `;
 
     floatingChatStream.appendChild(row);
@@ -3153,21 +3175,34 @@
     }
   }
 
-  // Quick chat input form
+  // Quick chat input form with @ mention autocomplete for fullscreen / maximized mode
+  const floatingMentionMenu = document.getElementById('floating-mention-autocomplete-menu');
+  const floatingMentionList = document.getElementById('floating-mention-list');
+  const floatingMentionController = setupMentionAutocomplete(floatingQuickChatInput, floatingMentionMenu, floatingMentionList);
+
   if (floatingQuickChatForm && floatingQuickChatInput) {
     floatingQuickChatForm.addEventListener('submit', (e) => {
       e.preventDefault();
+      // If mention menu is active and user hit enter, select item instead of sending empty message
+      if (floatingMentionController && floatingMentionController.isOpen()) {
+        return;
+      }
       const text = floatingQuickChatInput.value.trim();
       if (!text) return;
       const videoTime = Math.floor(getCurrentPlaybackTime());
       socket.emit('send-message', { text, videoTime });
       floatingQuickChatInput.value = '';
       floatingQuickChatForm.style.display = 'none';
+      if (floatingMentionController) floatingMentionController.close();
     });
 
     floatingQuickChatInput.addEventListener('keydown', (e) => {
       e.stopPropagation(); // prevent T/Enter from triggering player shortcuts while typing
       if (e.key === 'Escape') {
+        if (floatingMentionController && floatingMentionController.isOpen()) {
+          floatingMentionController.close();
+          return;
+        }
         e.preventDefault();
         floatingQuickChatForm.style.display = 'none';
         floatingQuickChatInput.blur();
@@ -3176,10 +3211,14 @@
 
     floatingQuickChatInput.addEventListener('blur', () => {
       setTimeout(() => {
-        if (document.activeElement !== floatingQuickChatInput) {
+        const activeEl = document.activeElement;
+        const inMenu = activeEl && activeEl.closest && activeEl.closest('#floating-mention-autocomplete-menu');
+        const inForm = activeEl && activeEl.closest && activeEl.closest('#floating-quick-chat-form');
+        if (activeEl !== floatingQuickChatInput && !inMenu && !inForm) {
           floatingQuickChatForm.style.display = 'none';
+          if (floatingMentionController) floatingMentionController.close();
         }
-      }, 180);
+      }, 250);
     });
   }
 

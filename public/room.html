@@ -140,7 +140,14 @@
                 <!-- Pure floating messages directly over the video with NO background, NO box, NO blur layer -->
               </div>
               <form class="floating-quick-chat-form" id="floating-quick-chat-form" style="display: none;">
-                <input type="text" id="floating-quick-chat-input" class="floating-quick-chat-input" placeholder="Message... (Enter to send)" maxlength="300" autocomplete="off">
+                <!-- WhatsApp-style @ Mention Popup Menu for Fullscreen / Maximized screen -->
+                <div class="mention-autocomplete-menu floating-mention-autocomplete-menu" id="floating-mention-autocomplete-menu" style="display: none;">
+                  <div class="mention-menu-header">Mention Member</div>
+                  <div class="mention-list" id="floating-mention-list">
+                    <!-- Dynamically populated room members -->
+                  </div>
+                </div>
+                <input type="text" id="floating-quick-chat-input" class="floating-quick-chat-input" placeholder="Message or @mention... (Enter to send)" maxlength="300" autocomplete="off">
               </form>
             </div>
 
