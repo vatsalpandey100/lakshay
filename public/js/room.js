@@ -249,16 +249,16 @@
 
   // Famous Meme Sound Effects mapped to each emoji reaction
   const EMOJI_MEME_SOUNDS = {
-    '🏔️': '/sounds/peak.mp3',     // Anime Kawaii Wow sparkle
-    '🔥': '/sounds/fire.mp3',     // Supa Hot Fire ("OHHHHHH!")
+    '🏔️': '/sounds/peak.mp3',     // Peak Cinema / Inception Horn BRAAAAM
+    '🔥': '/sounds/fire.mp3',     // Bad to the Bone Guitar Riff
     '❤️': '/sounds/love.mp3',     // Careless Whisper Saxophone
     '😂': '/sounds/funny.mp3',    // "Bruh" sound effect
     '😭': '/sounds/crying.mp3',   // Sad Hamster / Violin
     '🤯': '/sounds/blown.mp3',    // Vine Boom
-    '😱': '/sounds/shocked.mp3',  // The Prowler Shock Theme
-    '👀': '/sounds/sus.mp3',      // Among Us Sus
+    '😱': '/sounds/shocked.mp3',  // Metal Gear Solid Alert (!)
+    '👀': '/sounds/sus.mp3',      // Drip Sound Effect
     '🗿': '/sounds/chad.mp3',     // Gigachad Theme Phonk
-    '💦': '/sounds/drip.mp3',     // "SHEEEESH!"
+    '💦': '/sounds/drip.mp3',     // Drip
     'peak': '/sounds/peak.mp3',
     'fire': '/sounds/fire.mp3',
     'love': '/sounds/love.mp3',
