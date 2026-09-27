@@ -1977,43 +1977,55 @@
     }
   });
 
-  // Floating Reactions Engine (Burst of multiple emojis per tap, hardware-composited, zero lag)
-  function spawnFloatingReaction(emoji, burstCount = 5) {
+  // Floating Reactions Engine (Burst of emojis from different sides: left, right, center, edges)
+  function spawnFloatingReaction(emoji, burstCount = 10) {
     if (!floatingContainer || !emoji) return;
 
-    // Anchor origin for this tap burst (18% to 82% across video width)
-    const baseAnchorX = Math.random() * 64 + 18;
+    // Multi-side zones distributing emojis across the entire screen from both left and right sides
+    const zones = [
+      { minX: 4,  maxX: 20, drift: 'launch-from-left' },   // Far left launching inward
+      { minX: 80, maxX: 96, drift: 'launch-from-right' },  // Far right launching inward
+      { minX: 20, maxX: 38, drift: 'drift-right' },        // Mid-left drifting right
+      { minX: 62, maxX: 80, drift: 'drift-left' },         // Mid-right drifting left
+      { minX: 40, maxX: 60, drift: '' },                   // Center rising straight
+      { minX: 6,  maxX: 26, drift: 'launch-from-left' },   // Left edge wave 2
+      { minX: 74, maxX: 94, drift: 'launch-from-right' },  // Right edge wave 2
+      { minX: 26, maxX: 46, drift: 'drift-left' },         // Inner left
+      { minX: 54, maxX: 74, drift: 'drift-right' },        // Inner right
+      { minX: 42, maxX: 58, drift: 'drift-left' }          // Center-alt
+    ];
 
     for (let i = 0; i < burstCount; i++) {
+      const zone = zones[i % zones.length];
+      const staggerDelay = i * 26 + (Math.random() * 18);
+
       setTimeout(() => {
         if (!floatingContainer) return;
 
-        // Cap pool to 28 so rapid tapping stays ultra smooth
-        while (floatingContainer.children.length >= 28) {
+        // Cap pool to 45 so rapid tapping stays ultra smooth and dense
+        while (floatingContainer.children.length >= 45) {
           floatingContainer.removeChild(floatingContainer.firstChild);
         }
 
         const item = document.createElement('div');
-        // Drift variations: straight, drift-left, or drift-right
-        const driftTypes = ['', 'drift-left', 'drift-right'];
-        const driftClass = driftTypes[i % driftTypes.length];
-        item.className = `floating-reaction-item ${driftClass}`.trim();
+        item.className = `floating-reaction-item ${zone.drift}`.trim();
         item.textContent = emoji;
 
-        // Random horizontal spread around the anchor and natural font size variation
-        const offsetX = (Math.random() - 0.5) * 18;
-        const finalX = Math.max(6, Math.min(94, baseAnchorX + offsetX));
-        const sizeRem = 1.85 + Math.random() * 0.85; // 1.85rem to 2.7rem
+        // Spawn across this distinct side/zone with natural variation
+        const posX = zone.minX + Math.random() * (zone.maxX - zone.minX);
+        const sizeRem = 1.85 + Math.random() * 0.95; // 1.85rem to 2.8rem
+        const startBottom = 12 + Math.floor(Math.random() * 18); // 12px to 30px offset
 
-        item.style.left = `${finalX}%`;
+        item.style.left = `${posX.toFixed(1)}%`;
+        item.style.bottom = `${startBottom}px`;
         item.style.fontSize = `${sizeRem.toFixed(2)}rem`;
 
         floatingContainer.appendChild(item);
 
         setTimeout(() => {
           if (item.parentNode) item.remove();
-        }, 1200);
-      }, i * 35);
+        }, 1250);
+      }, staggerDelay);
     }
   }
 

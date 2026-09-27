@@ -828,6 +828,14 @@ body {
   animation-name: floatUpDriftRight;
 }
 
+.floating-reaction-item.launch-from-left {
+  animation-name: floatLaunchFromLeft;
+}
+
+.floating-reaction-item.launch-from-right {
+  animation-name: floatLaunchFromRight;
+}
+
 @keyframes floatUpAndFade {
   0% {
     opacity: 0;
@@ -858,11 +866,11 @@ body {
   }
   75% {
     opacity: 0.9;
-    transform: translate3d(-24px, -180px, 0) scale(1);
+    transform: translate3d(-28px, -180px, 0) scale(1);
   }
   100% {
     opacity: 0;
-    transform: translate3d(-34px, -250px, 0) scale(0.75);
+    transform: translate3d(-42px, -250px, 0) scale(0.75);
   }
 }
 
@@ -877,11 +885,49 @@ body {
   }
   75% {
     opacity: 0.9;
-    transform: translate3d(24px, -180px, 0) scale(1);
+    transform: translate3d(28px, -180px, 0) scale(1);
   }
   100% {
     opacity: 0;
-    transform: translate3d(34px, -250px, 0) scale(0.75);
+    transform: translate3d(42px, -250px, 0) scale(0.75);
+  }
+}
+
+@keyframes floatLaunchFromLeft {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 0, 0) scale(0.55);
+  }
+  15% {
+    opacity: 1;
+    transform: translate3d(20px, -45px, 0) scale(1.25);
+  }
+  70% {
+    opacity: 0.95;
+    transform: translate3d(55px, -190px, 0) scale(1.05);
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(80px, -260px, 0) scale(0.7);
+  }
+}
+
+@keyframes floatLaunchFromRight {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 0, 0) scale(0.55);
+  }
+  15% {
+    opacity: 1;
+    transform: translate3d(-20px, -45px, 0) scale(1.25);
+  }
+  70% {
+    opacity: 0.95;
+    transform: translate3d(-55px, -190px, 0) scale(1.05);
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(-80px, -260px, 0) scale(0.7);
   }
 }
 
