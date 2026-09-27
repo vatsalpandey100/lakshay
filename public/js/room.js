@@ -167,10 +167,16 @@
     return audioCtx;
   }
 
+  let lastPopToneTime = 0;
   function playUiTone(type) {
     const soundEnabled = document.getElementById('setting-sound-effects')?.checked ?? true;
     if (!soundEnabled) return;
     try {
+      const nowMs = performance.now();
+      if (type === 'pop') {
+        if (nowMs - lastPopToneTime < 70) return;
+        lastPopToneTime = nowMs;
+      }
       const ctx = getAudioContext();
       if (!ctx) return;
       const osc = ctx.createOscillator();
@@ -461,6 +467,15 @@
     });
 
     socket.on('floating-reaction', (data) => {
+      const isMe = socket && data.senderSocketId === socket.id;
+      if (isMe) {
+        const btn = document.querySelector(`.reaction-bar [data-emoji="${data.emoji}"]`);
+        const countEl = btn?.querySelector('.react-count');
+        if (countEl && typeof data.count === 'number') {
+          countEl.textContent = data.count;
+        }
+        return;
+      }
       spawnFloatingReaction(data.emoji);
       triggerReactionPill(data.emoji, data.count);
       playUiTone('pop');
@@ -1834,34 +1849,44 @@
     ambientCtx.fillRect(0, 0, ambientCanvas.width, ambientCanvas.height);
   }
 
-  // Floating Reactions Engine
+  // Floating Reactions Engine (Bounded pool, ultra-smooth)
   function spawnFloatingReaction(emoji) {
     if (!floatingContainer) return;
+
+    // Cap simultaneous floating elements to 18 so DOM and compositor never lag
+    while (floatingContainer.children.length >= 18) {
+      floatingContainer.removeChild(floatingContainer.firstChild);
+    }
+
     const item = document.createElement('div');
     item.className = 'floating-reaction-item';
     item.textContent = emoji;
 
     // Random horizontal start (10% to 90%)
     const randX = Math.random() * 80 + 10;
-    const randRot = (Math.random() - 0.5) * 45;
+    const randRot = (Math.random() - 0.5) * 40;
     item.style.left = `${randX}%`;
     item.style.setProperty('--rand-rot', `${randRot}`);
 
     floatingContainer.appendChild(item);
     setTimeout(() => {
-      item.remove();
-    }, 2800);
+      if (item.parentNode) item.remove();
+    }, 1850);
   }
 
-  // Anime Reaction Bar Functionality
+  // Anime Reaction Bar Functionality (Zero-reflow micro-animation)
   function triggerReactionPill(emoji, newCount) {
     if (!emoji) return;
     const btn = document.querySelector(`.reaction-bar [data-emoji="${emoji}"]`);
     if (btn) {
-      btn.classList.remove('pill-bump');
-      // Trigger reflow to restart animation if clicked rapidly
-      void btn.offsetWidth;
-      btn.classList.add('pill-bump', 'has-bumped');
+      btn.classList.add('has-bumped');
+      // Hardware-accelerated pulse via Web Animations API (no layout thrashing/reflow)
+      if (typeof btn.animate === 'function') {
+        btn.animate([
+          { transform: 'scale(1.16)' },
+          { transform: 'scale(1)' }
+        ], { duration: 160, easing: 'ease-out' });
+      }
       const countEl = btn.querySelector('.react-count');
       if (countEl) {
         if (typeof newCount === 'number') {
@@ -1874,15 +1899,21 @@
     }
   }
 
-  // Reaction Bar Click Events
+  // Reaction Bar Click Events (Instant 0ms feedback)
   document.querySelectorAll('.reaction-bar .react-pill-btn, .reaction-bar .react-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
       const emoji = btn.dataset.emoji;
-      if (socket && emoji) {
+      if (!emoji) return;
+
+      // 1. Instant local visual & audio response with zero lag
+      spawnFloatingReaction(emoji);
+      triggerReactionPill(emoji);
+      playUiTone('pop');
+
+      // 2. Broadcast to room via socket
+      if (socket && socket.connected) {
         socket.emit('send-reaction', { emoji });
-        spawnFloatingReaction(emoji);
-        triggerReactionPill(emoji);
-        playUiTone('pop');
       }
     });
   });

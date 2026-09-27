@@ -730,6 +730,7 @@ io.on('connection', (socket) => {
     io.to(currentRoomId).emit('floating-reaction', {
       emoji,
       count,
+      senderSocketId: socket.id,
       sender: currentUser ? currentUser.username : 'Someone',
       id: `react-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`
     });
