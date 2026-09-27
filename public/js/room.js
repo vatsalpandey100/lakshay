@@ -224,6 +224,122 @@
     }
   }
 
+  // Famous Meme Sound Effects mapped to each emoji reaction
+  const EMOJI_MEME_SOUNDS = {
+    '🏔️': '/sounds/peak.mp3',     // Anime Kawaii Wow sparkle
+    '🔥': '/sounds/fire.mp3',     // Supa Hot Fire ("OHHHHHH!")
+    '❤️': '/sounds/love.mp3',     // Careless Whisper Saxophone
+    '😂': '/sounds/funny.mp3',    // "Bruh" sound effect
+    '😭': '/sounds/crying.mp3',   // Sad Hamster / Violin
+    '🤯': '/sounds/blown.mp3',    // Vine Boom
+    '😱': '/sounds/shocked.mp3',  // The Prowler Shock Theme
+    '👀': '/sounds/sus.mp3',      // Among Us Sus
+    '🗿': '/sounds/chad.mp3',     // Gigachad Theme Phonk
+    '💦': '/sounds/drip.mp3',     // "SHEEEESH!"
+    'peak': '/sounds/peak.mp3',
+    'fire': '/sounds/fire.mp3',
+    'love': '/sounds/love.mp3',
+    'funny': '/sounds/funny.mp3',
+    'crying': '/sounds/crying.mp3',
+    'blown': '/sounds/blown.mp3',
+    'shocked': '/sounds/shocked.mp3',
+    'sus': '/sounds/sus.mp3',
+    'chad': '/sounds/chad.mp3',
+    'drip': '/sounds/drip.mp3'
+  };
+
+  // Pre-load audio pool for instantaneous 0ms playback and zero lag
+  const memeAudioPool = new Map();
+  Object.entries(EMOJI_MEME_SOUNDS).forEach(([key, url]) => {
+    if (!memeAudioPool.has(url)) {
+      const audio = new Audio();
+      audio.src = url;
+      audio.preload = 'auto';
+      audio.volume = 0.65;
+      memeAudioPool.set(url, [audio]);
+    }
+  });
+
+  let lastMemeSoundTime = 0;
+  let activeAudioList = [];
+
+  function playEmojiMemeSound(emoji) {
+    const soundEnabled = soundEffectsCheckbox ? soundEffectsCheckbox.checked : true;
+    if (!soundEnabled || !emoji) return;
+
+    const soundUrl = EMOJI_MEME_SOUNDS[emoji];
+    if (!soundUrl) {
+      playUiTone('pop');
+      return;
+    }
+
+    const nowMs = performance.now();
+    // Throttle rapid repeated triggers to avoid audio engine stutter (110ms threshold)
+    if (nowMs - lastMemeSoundTime < 110) {
+      return;
+    }
+    lastMemeSoundTime = nowMs;
+
+    try {
+      // Manage audio pool (max 3 pooled instances per sound)
+      let pool = memeAudioPool.get(soundUrl);
+      if (!pool) {
+        pool = [];
+        memeAudioPool.set(soundUrl, pool);
+      }
+
+      let audio = pool.find(a => a.paused || a.ended);
+      if (!audio) {
+        if (pool.length < 3) {
+          audio = new Audio(soundUrl);
+          audio.preload = 'auto';
+          pool.push(audio);
+        } else {
+          audio = pool[0];
+          audio.pause();
+          audio.currentTime = 0;
+        }
+      }
+
+      // Keep active list trimmed so we don't accumulate unbounded playing instances
+      activeAudioList = activeAudioList.filter(a => !a.paused && !a.ended);
+      if (activeAudioList.length >= 4) {
+        const oldest = activeAudioList.shift();
+        try { oldest.pause(); } catch (_) {}
+      }
+
+      audio.currentTime = 0;
+      audio.volume = 0.7;
+
+      const playPromise = audio.play();
+      if (playPromise !== undefined) {
+        playPromise.then(() => {
+          activeAudioList.push(audio);
+
+          // For longer audio meme tracks, auto-cut/fade after 3.2s so it stays punchy
+          setTimeout(() => {
+            if (!audio.paused && !audio.ended && audio.currentTime > 3.0) {
+              const fadeInterval = setInterval(() => {
+                if (audio.volume > 0.1) {
+                  audio.volume = Math.max(0, audio.volume - 0.15);
+                } else {
+                  clearInterval(fadeInterval);
+                  audio.pause();
+                  audio.currentTime = 0;
+                  audio.volume = 0.7;
+                }
+              }, 40);
+            }
+          }, 3200);
+        }).catch(() => {
+          playUiTone('pop');
+        });
+      }
+    } catch (e) {
+      playUiTone('pop');
+    }
+  }
+
   // Check Profile
   const storedName = localStorage.getItem('syncpulse_username');
   const storedAvatar = localStorage.getItem('syncpulse_avatar') || '🍿';
@@ -478,7 +594,7 @@
       }
       spawnFloatingReaction(data.emoji);
       triggerReactionPill(data.emoji, data.count);
-      playUiTone('pop');
+      playEmojiMemeSound(data.emoji);
     });
 
     socket.on('host-lock-changed', ({ isHostOnly, message }) => {
@@ -1952,7 +2068,7 @@
       // 1. Instant local visual & audio response with zero lag
       spawnFloatingReaction(emoji);
       triggerReactionPill(emoji);
-      playUiTone('pop');
+      playEmojiMemeSound(emoji);
 
       // 2. Queue reaction for batched network broadcast
       queueReactionEmit(emoji);
