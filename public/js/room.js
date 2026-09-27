@@ -1861,27 +1861,44 @@
     }
   });
 
-  // Floating Reactions Engine (Hardware-composited, bounded pool, zero lag)
-  function spawnFloatingReaction(emoji) {
-    if (!floatingContainer) return;
+  // Floating Reactions Engine (Burst of multiple emojis per tap, hardware-composited, zero lag)
+  function spawnFloatingReaction(emoji, burstCount = 5) {
+    if (!floatingContainer || !emoji) return;
 
-    // Cap simultaneous floating elements to 8 max so DOM and GPU compositor stay lightweight
-    while (floatingContainer.children.length >= 8) {
-      floatingContainer.removeChild(floatingContainer.firstChild);
+    // Anchor origin for this tap burst (18% to 82% across video width)
+    const baseAnchorX = Math.random() * 64 + 18;
+
+    for (let i = 0; i < burstCount; i++) {
+      setTimeout(() => {
+        if (!floatingContainer) return;
+
+        // Cap pool to 28 so rapid tapping stays ultra smooth
+        while (floatingContainer.children.length >= 28) {
+          floatingContainer.removeChild(floatingContainer.firstChild);
+        }
+
+        const item = document.createElement('div');
+        // Drift variations: straight, drift-left, or drift-right
+        const driftTypes = ['', 'drift-left', 'drift-right'];
+        const driftClass = driftTypes[i % driftTypes.length];
+        item.className = `floating-reaction-item ${driftClass}`.trim();
+        item.textContent = emoji;
+
+        // Random horizontal spread around the anchor and natural font size variation
+        const offsetX = (Math.random() - 0.5) * 18;
+        const finalX = Math.max(6, Math.min(94, baseAnchorX + offsetX));
+        const sizeRem = 1.85 + Math.random() * 0.85; // 1.85rem to 2.7rem
+
+        item.style.left = `${finalX}%`;
+        item.style.fontSize = `${sizeRem.toFixed(2)}rem`;
+
+        floatingContainer.appendChild(item);
+
+        setTimeout(() => {
+          if (item.parentNode) item.remove();
+        }, 1200);
+      }, i * 35);
     }
-
-    const item = document.createElement('div');
-    item.className = 'floating-reaction-item';
-    item.textContent = emoji;
-
-    // Random horizontal start (12% to 88%)
-    const randX = Math.random() * 76 + 12;
-    item.style.left = `${randX}%`;
-
-    floatingContainer.appendChild(item);
-    setTimeout(() => {
-      if (item.parentNode) item.remove();
-    }, 1150);
   }
 
   // Anime Reaction Bar Functionality (Instant O(1) update)
