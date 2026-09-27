@@ -10,7 +10,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const createNameInput = document.getElementById('create-user-name');
   if (createNameInput && !createNameInput.value) {
-    createNameInput.value = savedName || 'Lakshay';
+    createNameInput.value = savedName || 'Vatsal';
   }
 
   if (savedName) {
@@ -29,8 +29,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const createForm = document.getElementById('create-room-form');
   createForm.addEventListener('submit', (e) => {
     e.preventDefault();
-    const roomName = document.getElementById('create-room-name').value.trim() || 'Lakshay Anime Cinema';
-    const username = document.getElementById('create-user-name').value.trim() || 'Lakshay';
+    const roomName = document.getElementById('create-room-name').value.trim() || 'Anime Cinema Party';
+    const username = document.getElementById('create-user-name').value.trim() || 'Vatsal';
     const avatar = getSelectedAvatar('create-avatar-grid') || '👑';
 
     // Save profile

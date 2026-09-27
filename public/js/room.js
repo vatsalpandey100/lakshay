@@ -60,6 +60,70 @@
   roomId = decodeURIComponent(pathParts[pathParts.length - 1] || 'default-room');
   if (roomIdDisplay) roomIdDisplay.textContent = roomId;
 
+  // Persistent Local Chat Storage across page refreshes
+  const CHAT_STORAGE_KEY = `lakshay_chat_${roomId}`;
+
+  function getSavedLocalChat() {
+    try {
+      const saved = localStorage.getItem(CHAT_STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch (e) {
+      console.warn('Failed to parse local chat history:', e);
+    }
+    return [];
+  }
+
+  function saveLocalChat(messages) {
+    try {
+      if (!Array.isArray(messages)) return;
+      const toSave = messages.slice(-250);
+      localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(toSave));
+    } catch (e) {
+      console.warn('Failed to persist local chat:', e);
+    }
+  }
+
+  function mergeChatLists(localMsgs, serverMsgs) {
+    const seen = new Set();
+    const merged = [];
+
+    function addMsg(msg) {
+      if (!msg) return;
+      const key = msg.id || `${msg.timestamp}-${msg.system ? 'sys' : (msg.user?.username || '')}-${(msg.text || '').substring(0, 40)}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        merged.push(msg);
+      }
+    }
+
+    (localMsgs || []).forEach(addMsg);
+    (serverMsgs || []).forEach(addMsg);
+
+    merged.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+    return merged.slice(-250);
+  }
+
+  function appendToSavedLocalChat(msg) {
+    if (!msg) return;
+    const current = getSavedLocalChat();
+    const updated = mergeChatLists(current, [msg]);
+    saveLocalChat(updated);
+  }
+
+  // Pre-load and render cached chat messages immediately so they appear even before server connect
+  try {
+    const cachedChat = getSavedLocalChat();
+    if (cachedChat.length > 0 && chatMessagesList) {
+      cachedChat.forEach(msg => appendChatMessage(msg, false));
+      scrollChatToBottom();
+    }
+  } catch (err) {
+    console.warn('Error displaying cached chat:', err);
+  }
+
   // Avatar Formatting Helper (supports emoji and image URLs)
   function renderAvatar(avatar) {
     if (!avatar) return '🍿';
@@ -232,8 +296,15 @@
         hostLockCheckbox.disabled = !currentUser.isHost;
       }
 
+      // Merge local saved chat with server chat to ensure zero loss across refreshes
+      const cached = getSavedLocalChat();
+      const serverMessages = data.room.messages || [];
+      const mergedMessages = mergeChatLists(cached, serverMessages);
+      saveLocalChat(mergedMessages);
+      roomState.messages = mergedMessages;
+
       // Render room state
-      renderChatMessages(roomState.messages);
+      renderChatMessages(mergedMessages);
       renderQueue(roomState.queue);
       renderMembers(roomState.users);
       loadVideoSource(roomState.currentVideo, roomState.playback.currentTime, roomState.playback.state === 'playing');
@@ -267,18 +338,27 @@
     socket.on('user-joined', ({ user, users, message }) => {
       if (roomState && Array.isArray(users)) roomState.users = users;
       renderMembers(users);
-      appendChatMessage(message);
+      if (message) {
+        appendToSavedLocalChat(message);
+        appendChatMessage(message);
+      }
       playUiTone('join');
     });
 
     socket.on('user-left', ({ users, message }) => {
       if (roomState && Array.isArray(users)) roomState.users = users;
       renderMembers(users);
-      appendChatMessage(message);
+      if (message) {
+        appendToSavedLocalChat(message);
+        appendChatMessage(message);
+      }
     });
 
     socket.on('session-ended', ({ by, reason, message }) => {
-      if (message) appendChatMessage(message);
+      if (message) {
+        appendToSavedLocalChat(message);
+        appendChatMessage(message);
+      }
       showToast(reason || 'Watch party session has ended.', 'info');
       setTimeout(() => {
         window.location.href = '/';
@@ -330,17 +410,24 @@
       if (playerStreamBeacon) playerStreamBeacon.style.display = 'none';
 
       loadVideoSource(currentVideo, playback.currentTime || 0, playback.state === 'playing');
-      appendChatMessage(message);
+      if (message) {
+        appendToSavedLocalChat(message);
+        appendChatMessage(message);
+      }
       showToast(`🎬 Video changed: ${currentVideo.title}`);
     });
 
     socket.on('queue-updated', ({ queue, message }) => {
       if (roomState) roomState.queue = queue;
       renderQueue(queue);
-      if (message) appendChatMessage(message);
+      if (message) {
+        appendToSavedLocalChat(message);
+        appendChatMessage(message);
+      }
     });
 
     socket.on('new-message', (msg) => {
+      appendToSavedLocalChat(msg);
       appendChatMessage(msg);
       playUiTone('chat');
     });
@@ -361,8 +448,33 @@
       if (roomState) roomState.isHostOnly = isHostOnly;
       const hostLockCheckbox = document.getElementById('setting-host-lock');
       if (hostLockCheckbox) hostLockCheckbox.checked = isHostOnly;
-      appendChatMessage(message);
+      if (message) {
+        appendToSavedLocalChat(message);
+        appendChatMessage(message);
+      }
       showToast(isHostOnly ? '🔒 Host control locked.' : '🔓 Room control unlocked.');
+    });
+
+    socket.on('hosts-updated', ({ users, message }) => {
+      if (roomState && Array.isArray(users)) {
+        roomState.users = users;
+      }
+      if (currentUser && Array.isArray(users)) {
+        const me = users.find(u => u.socketId === socket.id || (currentUser.username && u.username.toLowerCase() === currentUser.username.toLowerCase()));
+        if (me) {
+          const wasHost = currentUser.isHost;
+          currentUser.isHost = me.isHost;
+          if (wasHost !== me.isHost) {
+            showToast(me.isHost ? '👑 You are now a Host!' : 'ℹ️ You are now a viewer.');
+          }
+        }
+      }
+      applyHostViewerPermissions(currentUser?.isHost);
+      renderMembers(users);
+      if (message) {
+        appendToSavedLocalChat(message);
+        appendChatMessage(message);
+      }
     });
 
     socket.on('host-transferred', ({ hostId, users, message }) => {
@@ -374,7 +486,10 @@
       const hostLockCheckbox = document.getElementById('setting-host-lock');
       if (hostLockCheckbox) hostLockCheckbox.disabled = !currentUser.isHost;
       renderMembers(users);
-      appendChatMessage(message);
+      if (message) {
+        appendToSavedLocalChat(message);
+        appendChatMessage(message);
+      }
     });
 
     socket.on('error-msg', ({ message }) => {
@@ -827,7 +942,7 @@
         showToast('▶ Resumed sync with Lakshay');
         return;
       }
-      showToast('🔒 Only Host (Lakshay) can pause or seek for the room.');
+      showToast('🔒 Only Host (Vatsal & Co-Hosts) can pause or seek for the room.');
       return;
     }
 
@@ -1116,7 +1231,7 @@
   if (timelineTrack) {
     timelineTrack.addEventListener('click', (e) => {
       if (roomState && roomState.isHostOnly && !currentUser?.isHost) {
-        showToast('🔒 Only Host (Lakshay) can seek the video.');
+        showToast('🔒 Only Host (Vatsal & Co-Hosts) can seek the video.');
         return;
       }
       const rect = timelineTrack.getBoundingClientRect();
@@ -1177,17 +1292,18 @@
     if (!isHost) {
       // Guest Viewer Mode
       if (playPause) {
-        playPause.title = '🔒 Playback controlled by Host (Lakshay)';
+        playPause.title = '🔒 Playback controlled by Host (Vatsal & Co-Hosts)';
         playPause.style.opacity = '0.6';
       }
       if (rewindBtn) rewindBtn.style.opacity = '0.4';
       if (forwardBtn) forwardBtn.style.opacity = '0.4';
       if (rateSelectEl) rateSelectEl.disabled = true;
 
-      // Update room header to indicate hosted by Lakshay
+      // Update room header to indicate hosted by Vatsal
       const hostPill = document.getElementById('room-name-header');
       if (hostPill) {
-        hostPill.innerHTML = `<span>${escapeHtml(roomState?.name || 'Party')}</span> <span class="member-badge" style="margin-left: 6px;">👑 Host: Lakshay</span>`;
+        const hostName = roomState?.hostName || 'Vatsal';
+        hostPill.innerHTML = `<span>${escapeHtml(roomState?.name || 'Party')}</span> <span class="member-badge" style="margin-left: 6px;">👑 Host: ${escapeHtml(hostName)}</span>`;
       }
     } else {
       // Sovereign Host Mode
@@ -2963,8 +3079,31 @@
     if (badge && Array.isArray(users)) badge.textContent = users.length;
 
     membersItemsList.innerHTML = users.map(user => {
-      const isYou = currentUser && user.socketId === currentUser.socketId;
-      const canTransfer = currentUser?.isHost && !user.isHost;
+      const isYou = currentUser && (user.socketId === currentUser.socketId || (currentUser.username && user.username === currentUser.username));
+      const isVatsal = (user.username || '').trim().toLowerCase() === 'vatsal';
+      const amIHost = !!currentUser?.isHost;
+
+      let hostControlsHtml = '';
+      if (user.isHost) {
+        hostControlsHtml += `<span class="member-badge">👑 Host</span>`;
+        // If current user is host and the target user is not self and not Vatsal, can revoke host
+        if (amIHost && !isYou && !isVatsal) {
+          hostControlsHtml += `
+            <button type="button" class="btn btn-secondary btn-sm btn-toggle-host" data-socket-id="${user.socketId}" data-make-host="false" style="font-size: 0.7rem; padding: 2px 7px; color: #ff6b6b; border-color: rgba(255,107,107,0.35);" title="Revoke Host status">
+              Remove Host
+            </button>
+          `;
+        }
+      } else {
+        // If current user is host and the target is not a host, can appoint as co-host
+        if (amIHost && !isYou) {
+          hostControlsHtml += `
+            <button type="button" class="btn btn-secondary btn-sm btn-toggle-host" data-socket-id="${user.socketId}" data-make-host="true" style="font-size: 0.7rem; padding: 2px 7px;" title="Make this user a Co-Host">
+              👑 Make Host
+            </button>
+          `;
+        }
+      }
 
       return `
         <div class="member-item">
@@ -2979,22 +3118,18 @@
             </div>
           </div>
           <div style="display: flex; align-items: center; gap: 0.5rem;">
-            ${user.isHost ? '<span class="member-badge">👑 Host</span>' : ''}
-            ${canTransfer ? `
-              <button type="button" class="btn btn-secondary btn-sm btn-make-host" data-socket-id="${user.socketId}" style="font-size: 0.7rem; padding: 2px 6px;">
-                Make Host
-              </button>
-            ` : ''}
+            ${hostControlsHtml}
           </div>
         </div>
       `;
     }).join('');
 
-    membersItemsList.querySelectorAll('.btn-make-host').forEach(btn => {
+    membersItemsList.querySelectorAll('.btn-toggle-host').forEach(btn => {
       btn.addEventListener('click', () => {
         const sid = btn.dataset.socketId;
+        const makeHost = btn.dataset.makeHost === 'true';
         if (socket && sid) {
-          socket.emit('transfer-host', { newHostSocketId: sid });
+          socket.emit('toggle-co-host', { targetSocketId: sid, makeHost });
         }
       });
     });

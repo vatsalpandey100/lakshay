@@ -21,8 +21,60 @@ const io = new Server(server, {
 const PORT = process.env.PORT || 3000;
 
 // Room storage (in-memory for active sessions)
-// roomId -> { id, name, hostId, isHostOnly, currentVideo, playback, queue, users, messages }
+// roomId -> { id, name, hostId, hostIds, isHostOnly, currentVideo, playback, queue, users, messages }
 const rooms = new Map();
+
+// Persistent Chat History Storage across refreshes and restarts
+const CHAT_DATA_FILE = path.join(__dirname, 'data', 'chat_history.json');
+
+function loadPersistedMessages(roomId) {
+  try {
+    if (fs.existsSync(CHAT_DATA_FILE)) {
+      const data = JSON.parse(fs.readFileSync(CHAT_DATA_FILE, 'utf8'));
+      if (data && Array.isArray(data[roomId])) {
+        return data[roomId];
+      }
+    }
+  } catch (err) {
+    console.error('Error loading chat history:', err.message);
+  }
+  return null;
+}
+
+function savePersistedMessages(roomId, messages) {
+  try {
+    const dataDir = path.dirname(CHAT_DATA_FILE);
+    if (!fs.existsSync(dataDir)) {
+      fs.mkdirSync(dataDir, { recursive: true });
+    }
+    let allData = {};
+    if (fs.existsSync(CHAT_DATA_FILE)) {
+      try {
+        allData = JSON.parse(fs.readFileSync(CHAT_DATA_FILE, 'utf8')) || {};
+      } catch (e) {
+        allData = {};
+      }
+    }
+    // Store up to 250 messages per room
+    allData[roomId] = (messages || []).slice(-250);
+    fs.writeFileSync(CHAT_DATA_FILE, JSON.stringify(allData, null, 2), 'utf8');
+  } catch (err) {
+    console.error('Error saving chat history:', err.message);
+  }
+}
+
+// Multi-Host Authority Helper: Vatsal is sovereign, plus any users appointed as co-hosts
+function isUserHost(room, socketId, username = '') {
+  if (!room) return false;
+  const uname = (username || '').trim().toLowerCase();
+  if (uname === 'vatsal') return true;
+  if (room.coHostUsernames && uname && room.coHostUsernames.has(uname)) return true;
+  if (room.hostId === socketId) return true;
+  if (room.hostIds && room.hostIds.has(socketId)) return true;
+  const user = room.users && room.users.get(socketId);
+  if (user && user.isHost) return true;
+  return false;
+}
 
 // Preset videos for quick demo and fallback
 const PRESET_VIDEOS = [
@@ -62,15 +114,18 @@ const PRESET_VIDEOS = [
 
 function getOrCreateRoom(roomId, roomName = null) {
   if (!rooms.has(roomId)) {
+    const savedMessages = loadPersistedMessages(roomId);
     const initialVideo = PRESET_VIDEOS[0];
     rooms.set(roomId, {
       id: roomId,
       name: roomName || `Party ${roomId.substring(0, 6)}`,
       createdAt: Date.now(),
       hostId: null,
+      hostIds: new Set(),
+      coHostUsernames: new Set(),
       hostToken: null,
-      hostName: 'Lakshay',
-      isHostOnly: true, // Only hosted by Lakshay
+      hostName: 'Vatsal',
+      isHostOnly: true, // Only hosted by Vatsal and chosen co-hosts
       currentVideo: { ...initialVideo },
       playback: {
         state: 'paused', // 'playing' | 'paused' | 'buffering'
@@ -80,7 +135,7 @@ function getOrCreateRoom(roomId, roomName = null) {
       },
       queue: [],
       users: new Map(), // socketId -> userData
-      messages: [
+      messages: savedMessages && savedMessages.length > 0 ? savedMessages : [
         {
           id: 'welcome',
           system: true,
@@ -298,23 +353,43 @@ io.on('connection', (socket) => {
 
     const room = getOrCreateRoom(roomId, roomName);
 
-    // Sovereign Host Control: Only the creator (Lakshay) holds host authority
+    // Sovereign Host Control: Vatsal or room creator or granted co-hosts
+    const isVatsal = (username?.trim().toLowerCase() === 'vatsal');
     let isThisUserHost = false;
-    if (isCreating || !room.hostToken) {
-      room.hostToken = hostToken || `host-tok-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
+    if (isVatsal) {
+      if (!room.hostToken) {
+        room.hostToken = hostToken || `host-tok-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
+      }
       room.hostId = socket.id;
-      room.hostName = username?.trim() || 'Lakshay';
+      room.hostName = 'Vatsal';
+      if (!room.hostIds) room.hostIds = new Set();
+      room.hostIds.add(socket.id);
       isThisUserHost = true;
-    } else if (hostToken && hostToken === room.hostToken) {
+    } else if (room.coHostUsernames && username && room.coHostUsernames.has(username.trim().toLowerCase())) {
+      // Rejoining co-host
+      if (!room.hostIds) room.hostIds = new Set();
+      room.hostIds.add(socket.id);
+      isThisUserHost = true;
+    } else if (isCreating || !room.hostToken) {
+      if (!room.hostToken) {
+        room.hostToken = hostToken || `host-tok-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
+      }
+      room.hostId = socket.id;
+      room.hostName = username?.trim() || 'Host';
+      if (!room.hostIds) room.hostIds = new Set();
+      room.hostIds.add(socket.id);
+      isThisUserHost = true;
+    } else if (hostToken && (hostToken === room.hostToken || (room.hostTokens && room.hostTokens.has(hostToken)))) {
       // Rejoining host
       room.hostId = socket.id;
-      room.hostName = username?.trim() || room.hostName;
+      if (!room.hostIds) room.hostIds = new Set();
+      room.hostIds.add(socket.id);
       isThisUserHost = true;
     }
 
     const userData = {
       socketId: socket.id,
-      username: username?.trim() || (isThisUserHost ? 'Lakshay' : `Viewer ${Math.floor(Math.random() * 900 + 100)}`),
+      username: username?.trim() || (isThisUserHost ? (isVatsal ? 'Vatsal' : 'Host') : `Viewer ${Math.floor(Math.random() * 900 + 100)}`),
       avatar: avatar || (isThisUserHost ? '👑' : '🍿'),
       isHost: isThisUserHost,
       joinedAt: Date.now()
@@ -331,6 +406,7 @@ io.on('connection', (socket) => {
         id: room.id,
         name: room.name,
         hostId: room.hostId,
+        hostIds: Array.from(room.hostIds || []),
         isHostOnly: room.isHostOnly,
         currentVideo: room.currentVideo,
         playback: {
@@ -339,7 +415,7 @@ io.on('connection', (socket) => {
         },
         queue: room.queue,
         users: Array.from(room.users.values()),
-        messages: room.messages.slice(-40)
+        messages: room.messages.slice(-100)
       },
       you: {
         ...userData,
@@ -355,6 +431,7 @@ io.on('connection', (socket) => {
       timestamp: Date.now()
     };
     room.messages.push(joinMsg);
+    savePersistedMessages(roomId, room.messages);
 
     io.to(roomId).emit('user-joined', {
       user: userData,
@@ -369,8 +446,8 @@ io.on('connection', (socket) => {
     const room = rooms.get(currentRoomId);
 
     // Check host-only lock
-    if (room.isHostOnly && room.hostId !== socket.id) {
-      socket.emit('error-msg', { message: 'Only the host has playback controls enabled.' });
+    if (room.isHostOnly && !isUserHost(room, socket.id, currentUser?.username)) {
+      socket.emit('error-msg', { message: 'Only hosts have playback controls enabled.' });
       return;
     }
 
@@ -430,8 +507,8 @@ io.on('connection', (socket) => {
     if (!currentRoomId || !rooms.has(currentRoomId)) return;
     const room = rooms.get(currentRoomId);
 
-    if (room.isHostOnly && room.hostId !== socket.id) {
-      socket.emit('error-msg', { message: 'Only the host can change videos.' });
+    if (room.isHostOnly && !isUserHost(room, socket.id, currentUser?.username)) {
+      socket.emit('error-msg', { message: 'Only hosts can change videos.' });
       return;
     }
 
@@ -539,8 +616,8 @@ io.on('connection', (socket) => {
     if (!currentRoomId || !rooms.has(currentRoomId)) return;
     const room = rooms.get(currentRoomId);
 
-    if (room.isHostOnly && room.hostId !== socket.id) {
-      socket.emit('error-msg', { message: 'Only the host can skip or play from queue.' });
+    if (room.isHostOnly && !isUserHost(room, socket.id, currentUser?.username)) {
+      socket.emit('error-msg', { message: 'Only hosts can skip or play from queue.' });
       return;
     }
 
@@ -561,6 +638,7 @@ io.on('connection', (socket) => {
         timestamp: Date.now()
       };
       room.messages.push(changeMsg);
+      savePersistedMessages(currentRoomId, room.messages);
 
       io.to(currentRoomId).emit('video-changed', {
         currentVideo: room.currentVideo,
@@ -584,11 +662,11 @@ io.on('connection', (socket) => {
       socketId: socket.id,
       username: 'Viewer',
       avatar: '🍿',
-      isHost: room.hostId === socket.id
+      isHost: isUserHost(room, socket.id)
     };
 
     const trimmedText = text.trim().substring(0, 500);
-    // Parse @ mentions (e.g. @Lakshay, @everyone, @all)
+    // Parse @ mentions (e.g. @Vatsal, @everyone, @all)
     const rawMentions = trimmedText.match(/@([a-zA-Z0-9_\u00C0-\u017F]+)/g) || [];
     const mentions = rawMentions.map(m => m.substring(1));
 
@@ -603,7 +681,8 @@ io.on('connection', (socket) => {
     };
 
     room.messages.push(message);
-    if (room.messages.length > 100) room.messages.shift();
+    if (room.messages.length > 200) room.messages.shift();
+    savePersistedMessages(currentRoomId, room.messages);
 
     io.to(currentRoomId).emit('new-message', message);
 
@@ -651,8 +730,8 @@ io.on('connection', (socket) => {
     if (!currentRoomId || !rooms.has(currentRoomId)) return;
     const room = rooms.get(currentRoomId);
 
-    if (room.hostId !== socket.id) {
-      socket.emit('error-msg', { message: 'Only current host can toggle host controls.' });
+    if (!isUserHost(room, socket.id, currentUser?.username)) {
+      socket.emit('error-msg', { message: 'Only hosts can toggle host controls.' });
       return;
     }
 
@@ -661,11 +740,12 @@ io.on('connection', (socket) => {
       id: `sys-${Date.now()}`,
       system: true,
       text: room.isHostOnly
-        ? `🔒 Host controls enabled. Only the host can control playback.`
+        ? `🔒 Host controls enabled. Only hosts can control playback.`
         : `🔓 Room control unlocked. Anyone can play, pause, or seek.`,
       timestamp: Date.now()
     };
     room.messages.push(lockMsg);
+    savePersistedMessages(currentRoomId, room.messages);
 
     io.to(currentRoomId).emit('host-lock-changed', {
       isHostOnly: room.isHostOnly,
@@ -673,30 +753,89 @@ io.on('connection', (socket) => {
     });
   });
 
-  // Transfer Host
+  // Add / Remove Co-Host (Chosen by Vatsal or existing Host)
+  socket.on('toggle-co-host', ({ targetSocketId, makeHost }) => {
+    if (!currentRoomId || !rooms.has(currentRoomId)) return;
+    const room = rooms.get(currentRoomId);
+    const caller = currentUser || room.users.get(socket.id);
+
+    // Only existing hosts can grant or revoke host status
+    if (!isUserHost(room, socket.id, caller?.username)) {
+      socket.emit('error-msg', { message: 'Only hosts can manage host permissions.' });
+      return;
+    }
+
+    if (room.users.has(targetSocketId)) {
+      const targetUser = room.users.get(targetSocketId);
+      const shouldBeHost = typeof makeHost === 'boolean' ? makeHost : !targetUser.isHost;
+
+      // Don't allow revoking Vatsal's host status
+      if (!shouldBeHost && (targetUser.username || '').trim().toLowerCase() === 'vatsal') {
+        socket.emit('error-msg', { message: 'Vatsal is the primary host and cannot be removed.' });
+        return;
+      }
+
+      targetUser.isHost = shouldBeHost;
+      if (!room.hostIds) room.hostIds = new Set();
+      if (!room.coHostUsernames) room.coHostUsernames = new Set();
+
+      if (shouldBeHost) {
+        room.hostIds.add(targetSocketId);
+        if (targetUser.username) {
+          room.coHostUsernames.add(targetUser.username.trim().toLowerCase());
+        }
+      } else {
+        room.hostIds.delete(targetSocketId);
+        if (targetUser.username) {
+          room.coHostUsernames.delete(targetUser.username.trim().toLowerCase());
+        }
+        if (room.hostId === targetSocketId) {
+          room.hostId = socket.id;
+        }
+      }
+
+      const hostChangeMsg = {
+        id: `sys-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+        system: true,
+        text: shouldBeHost
+          ? `👑 ${targetUser.username} was made a Host by ${caller?.username || 'Host'}.`
+          : `👑 ${targetUser.username} is no longer a Host.`,
+        timestamp: Date.now()
+      };
+      room.messages.push(hostChangeMsg);
+      savePersistedMessages(currentRoomId, room.messages);
+
+      io.to(currentRoomId).emit('hosts-updated', {
+        users: Array.from(room.users.values()),
+        message: hostChangeMsg
+      });
+    }
+  });
+
+  // Transfer Primary Host
   socket.on('transfer-host', ({ newHostSocketId }) => {
     if (!currentRoomId || !rooms.has(currentRoomId)) return;
     const room = rooms.get(currentRoomId);
 
-    if (room.hostId !== socket.id) return;
+    if (!isUserHost(room, socket.id, currentUser?.username)) return;
     if (room.users.has(newHostSocketId)) {
       room.hostId = newHostSocketId;
+      if (!room.hostIds) room.hostIds = new Set();
+      room.hostIds.add(newHostSocketId);
 
-      // Update users
-      for (const [sid, u] of room.users.entries()) {
-        u.isHost = sid === newHostSocketId;
-      }
+      const targetUser = room.users.get(newHostSocketId);
+      targetUser.isHost = true;
 
-      const newHost = room.users.get(newHostSocketId);
       const hostMsg = {
         id: `sys-${Date.now()}`,
         system: true,
-        text: `👑 ${newHost.username} is now the host of this room.`,
+        text: `👑 ${targetUser.username} is now a Host of this room.`,
         timestamp: Date.now()
       };
       room.messages.push(hostMsg);
+      savePersistedMessages(currentRoomId, room.messages);
 
-      io.to(currentRoomId).emit('host-transferred', {
+      io.to(currentRoomId).emit('hosts-updated', {
         hostId: room.hostId,
         users: Array.from(room.users.values()),
         message: hostMsg
@@ -709,13 +848,13 @@ io.on('connection', (socket) => {
     if (!currentRoomId || !rooms.has(currentRoomId)) return;
     const room = rooms.get(currentRoomId);
     const user = room.users.get(socket.id);
-    const isHost = (room.hostId === socket.id);
+    const isHost = isUserHost(room, socket.id, user?.username);
 
     if (isHost) {
       const endMsg = {
         id: `sys-${Date.now()}-ended`,
         system: true,
-        text: `🚪 Watch party session ended by Host (${room.hostName || user?.username || 'Lakshay'}).`,
+        text: `🚪 Watch party session ended by Host (${room.hostName || user?.username || 'Vatsal'}).`,
         timestamp: Date.now()
       };
       io.to(currentRoomId).emit('session-ended', {
@@ -735,6 +874,8 @@ io.on('connection', (socket) => {
           timestamp: Date.now()
         };
         room.messages.push(leaveMsg);
+        savePersistedMessages(currentRoomId, room.messages);
+
         io.to(currentRoomId).emit('user-left', {
           socketId: socket.id,
           users: Array.from(room.users.values()),
@@ -763,6 +904,8 @@ io.on('connection', (socket) => {
         timestamp: Date.now()
       };
       room.messages.push(leaveMsg);
+      savePersistedMessages(currentRoomId, room.messages);
+
       io.to(currentRoomId).emit('user-left', {
         socketId: socket.id,
         users: Array.from(room.users.values()),
@@ -782,6 +925,7 @@ io.on('connection', (socket) => {
       const room = rooms.get(currentRoomId);
       const user = room.users.get(socket.id);
       room.users.delete(socket.id);
+      if (room.hostIds) room.hostIds.delete(socket.id);
 
       socket.to(currentRoomId).emit('user-typing', {
         socketId: socket.id,
@@ -796,18 +940,26 @@ io.on('connection', (socket) => {
           timestamp: Date.now()
         };
         room.messages.push(leaveMsg);
+        savePersistedMessages(currentRoomId, room.messages);
 
-        // If host temporarily leaves, do NOT pass host to guest
+        // Check if other hosts remain online
+        const hasOtherHostOnline = Array.from(room.users.values()).some(u => u.isHost && u.socketId !== socket.id);
         if (room.hostId === socket.id) {
-          room.hostId = null;
-          const hostAwayMsg = {
-            id: `sys-${Date.now()}-hostaway`,
-            system: true,
-            text: `👑 Host (${room.hostName || 'Lakshay'}) stepped away. Waiting for host to resume...`,
-            timestamp: Date.now()
-          };
-          room.messages.push(hostAwayMsg);
-          io.to(currentRoomId).emit('host-away', { message: hostAwayMsg });
+          if (hasOtherHostOnline) {
+            const nextHost = Array.from(room.users.values()).find(u => u.isHost && u.socketId !== socket.id);
+            room.hostId = nextHost ? nextHost.socketId : null;
+          } else {
+            room.hostId = null;
+            const hostAwayMsg = {
+              id: `sys-${Date.now()}-hostaway`,
+              system: true,
+              text: `👑 Host (${room.hostName || 'Vatsal'}) stepped away. Waiting for host to resume...`,
+              timestamp: Date.now()
+            };
+            room.messages.push(hostAwayMsg);
+            savePersistedMessages(currentRoomId, room.messages);
+            io.to(currentRoomId).emit('host-away', { message: hostAwayMsg });
+          }
         }
 
         io.to(currentRoomId).emit('user-left', {

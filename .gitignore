@@ -2,3 +2,6 @@ node_modules/
 .DS_Store
 public/videos/*
 !public/videos/.gitkeep
+data/*
+!data/.gitkeep
+server.log
