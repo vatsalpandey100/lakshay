@@ -48,6 +48,29 @@
   const chatMessagesList = document.getElementById('chat-messages-list');
   const chatForm = document.getElementById('chat-send-form');
   const chatInput = document.getElementById('chat-text-input');
+  const floatingQuickChatForm = document.getElementById('floating-quick-chat-form');
+  const floatingQuickChatInput = document.getElementById('floating-quick-chat-input');
+
+  // Synchronize draft chat text between sidebar (minimize) and on-video overlay (maximize)
+  function syncDraftChatText(sourceInput) {
+    if (!chatInput || !floatingQuickChatInput) return;
+    if (sourceInput === chatInput) {
+      floatingQuickChatInput.value = chatInput.value;
+    } else if (sourceInput === floatingQuickChatInput) {
+      chatInput.value = floatingQuickChatInput.value;
+    } else {
+      if (document.activeElement === floatingQuickChatInput) {
+        chatInput.value = floatingQuickChatInput.value;
+      } else if (document.activeElement === chatInput) {
+        floatingQuickChatInput.value = chatInput.value;
+      } else {
+        const draft = chatInput.value || floatingQuickChatInput.value || '';
+        chatInput.value = draft;
+        floatingQuickChatInput.value = draft;
+      }
+    }
+  }
+
   const queueItemsList = document.getElementById('queue-items-list');
   const membersItemsList = document.getElementById('members-items-list');
   const floatingContainer = document.getElementById('floating-reactions');
@@ -1903,14 +1926,15 @@
       if (typeof isPlayerMaximizedOrFullscreen === 'function' && isPlayerMaximizedOrFullscreen()) {
         if (isOverlayChatEnabled && floatingQuickChatForm && floatingQuickChatInput) {
           e.preventDefault();
+          syncDraftChatText(chatInput);
           floatingQuickChatForm.style.display = 'flex';
           floatingQuickChatInput.focus();
         }
       } else {
         // In normal mode: Enter focuses main sidebar chat input
-        const mainChatInput = document.getElementById('chat-input');
-        if (mainChatInput && document.activeElement !== mainChatInput) {
-          mainChatInput.focus();
+        if (chatInput && document.activeElement !== chatInput) {
+          syncDraftChatText(floatingQuickChatInput);
+          chatInput.focus();
         }
       }
     }
@@ -2534,6 +2558,7 @@
       } else {
         chatInput.value = stamp + chatInput.value;
       }
+      syncDraftChatText(chatInput);
       chatInput.focus();
     });
   }
@@ -2605,6 +2630,7 @@
       targetInput.focus();
       targetInput.setSelectionRange(nextCursor, nextCursor);
       closeTargetMenu();
+      syncDraftChatText(targetInput);
     }
 
     function handleInputMention() {
@@ -2693,6 +2719,7 @@
     }
 
     targetInput.addEventListener('input', () => {
+      syncDraftChatText(targetInput);
       const val = targetInput.value;
       if (val.trim().length > 0) {
         if (!isCurrentlyTyping && socket && socket.connected) {
@@ -2717,6 +2744,7 @@
     });
 
     targetInput.addEventListener('blur', () => {
+      syncDraftChatText(targetInput);
       setTimeout(() => {
         closeTargetMenu();
       }, 250);
@@ -2782,9 +2810,10 @@
         isCurrentlyTyping = false;
         socket.emit('typing-stop');
       }
-      closeMentionMenu();
+      if (sidebarMentionController) sidebarMentionController.close();
 
       chatInput.value = '';
+      if (floatingQuickChatInput) floatingQuickChatInput.value = '';
       chatInput.focus();
     });
   }
@@ -2924,8 +2953,6 @@
   const floatingChatStream = document.getElementById('floating-chat-stream');
   const videoCornerChatBtn = document.getElementById('video-corner-chat-btn');
   const cornerChatDot = document.getElementById('corner-chat-dot');
-  const floatingQuickChatForm = document.getElementById('floating-quick-chat-form');
-  const floatingQuickChatInput = document.getElementById('floating-quick-chat-input');
 
   let isOverlayChatEnabled = true;
 
@@ -2979,6 +3006,7 @@
         // Chat is hidden: tap msg icon to show messages and open quick input
         setOverlayChatEnabled(true);
         if (floatingQuickChatForm && floatingQuickChatInput) {
+          syncDraftChatText(chatInput);
           floatingQuickChatForm.style.display = 'flex';
           floatingQuickChatInput.focus();
         }
@@ -3073,9 +3101,17 @@
     if (isFull) {
       showControls(3000);
       syncRecentOverlayMessages();
+      // Synchronize text from minimize into maximize
+      syncDraftChatText(chatInput);
+      if (floatingQuickChatInput && floatingQuickChatInput.value.trim().length > 0) {
+        if (floatingQuickChatForm) floatingQuickChatForm.style.display = 'flex';
+      }
     } else {
+      // Synchronize text from maximize into minimize
+      syncDraftChatText(floatingQuickChatInput);
       if (floatingQuickChatForm) floatingQuickChatForm.style.display = 'none';
       if (floatingChatStream) floatingChatStream.innerHTML = '';
+      if (floatingMentionController) floatingMentionController.close();
     }
   }
 
@@ -3192,6 +3228,7 @@
       const videoTime = Math.floor(getCurrentPlaybackTime());
       socket.emit('send-message', { text, videoTime });
       floatingQuickChatInput.value = '';
+      if (chatInput) chatInput.value = '';
       floatingQuickChatForm.style.display = 'none';
       if (floatingMentionController) floatingMentionController.close();
     });
