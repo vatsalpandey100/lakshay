@@ -717,14 +717,15 @@ io.on('connection', (socket) => {
     });
   });
 
-  // Floating Reaction
-  socket.on('send-reaction', ({ emoji }) => {
+  // Floating Reaction (Supports rapid burst / batched counts)
+  socket.on('send-reaction', ({ emoji, count: clientCount }) => {
     if (!currentRoomId || !emoji) return;
     const room = rooms.get(currentRoomId);
-    let count = 1;
+    const inc = (typeof clientCount === 'number' && clientCount > 0) ? Math.min(clientCount, 50) : 1;
+    let count = inc;
     if (room) {
       if (!room.reactionCounts) room.reactionCounts = {};
-      room.reactionCounts[emoji] = (room.reactionCounts[emoji] || 0) + 1;
+      room.reactionCounts[emoji] = (room.reactionCounts[emoji] || 0) + inc;
       count = room.reactionCounts[emoji];
     }
     io.to(currentRoomId).emit('floating-reaction', {
@@ -732,6 +733,7 @@ io.on('connection', (socket) => {
       count,
       senderSocketId: socket.id,
       sender: currentUser ? currentUser.username : 'Someone',
+      burst: inc,
       id: `react-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`
     });
   });

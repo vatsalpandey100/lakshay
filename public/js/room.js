@@ -168,13 +168,14 @@
   }
 
   let lastPopToneTime = 0;
+  const soundEffectsCheckbox = document.getElementById('setting-sound-effects');
   function playUiTone(type) {
-    const soundEnabled = document.getElementById('setting-sound-effects')?.checked ?? true;
+    const soundEnabled = soundEffectsCheckbox ? soundEffectsCheckbox.checked : true;
     if (!soundEnabled) return;
     try {
       const nowMs = performance.now();
       if (type === 'pop') {
-        if (nowMs - lastPopToneTime < 70) return;
+        if (nowMs - lastPopToneTime < 130) return;
         lastPopToneTime = nowMs;
       }
       const ctx = getAudioContext();
@@ -469,10 +470,9 @@
     socket.on('floating-reaction', (data) => {
       const isMe = socket && data.senderSocketId === socket.id;
       if (isMe) {
-        const btn = document.querySelector(`.reaction-bar [data-emoji="${data.emoji}"]`);
-        const countEl = btn?.querySelector('.react-count');
-        if (countEl && typeof data.count === 'number') {
-          countEl.textContent = data.count;
+        const entry = reactionElementsMap.get(data.emoji);
+        if (entry && entry.countEl && typeof data.count === 'number') {
+          entry.countEl.textContent = data.count;
         }
         return;
       }
@@ -1849,12 +1849,24 @@
     ambientCtx.fillRect(0, 0, ambientCanvas.width, ambientCanvas.height);
   }
 
-  // Floating Reactions Engine (Bounded pool, ultra-smooth)
+  // Reaction element cache for fast O(1) DOM updates without querySelector spam
+  const reactionElementsMap = new Map();
+  document.querySelectorAll('.reaction-bar .react-pill-btn, .reaction-bar .react-btn').forEach(btn => {
+    const emoji = btn.dataset.emoji;
+    if (emoji) {
+      reactionElementsMap.set(emoji, {
+        btn,
+        countEl: btn.querySelector('.react-count')
+      });
+    }
+  });
+
+  // Floating Reactions Engine (Hardware-composited, bounded pool, zero lag)
   function spawnFloatingReaction(emoji) {
     if (!floatingContainer) return;
 
-    // Cap simultaneous floating elements to 18 so DOM and compositor never lag
-    while (floatingContainer.children.length >= 18) {
+    // Cap simultaneous floating elements to 8 max so DOM and GPU compositor stay lightweight
+    while (floatingContainer.children.length >= 8) {
       floatingContainer.removeChild(floatingContainer.firstChild);
     }
 
@@ -1862,40 +1874,54 @@
     item.className = 'floating-reaction-item';
     item.textContent = emoji;
 
-    // Random horizontal start (10% to 90%)
-    const randX = Math.random() * 80 + 10;
-    const randRot = (Math.random() - 0.5) * 40;
+    // Random horizontal start (12% to 88%)
+    const randX = Math.random() * 76 + 12;
     item.style.left = `${randX}%`;
-    item.style.setProperty('--rand-rot', `${randRot}`);
 
     floatingContainer.appendChild(item);
     setTimeout(() => {
       if (item.parentNode) item.remove();
-    }, 1850);
+    }, 1150);
   }
 
-  // Anime Reaction Bar Functionality (Zero-reflow micro-animation)
+  // Anime Reaction Bar Functionality (Instant O(1) update)
   function triggerReactionPill(emoji, newCount) {
     if (!emoji) return;
-    const btn = document.querySelector(`.reaction-bar [data-emoji="${emoji}"]`);
-    if (btn) {
-      btn.classList.add('has-bumped');
-      // Hardware-accelerated pulse via Web Animations API (no layout thrashing/reflow)
-      if (typeof btn.animate === 'function') {
-        btn.animate([
-          { transform: 'scale(1.16)' },
-          { transform: 'scale(1)' }
-        ], { duration: 160, easing: 'ease-out' });
+    const entry = reactionElementsMap.get(emoji);
+    if (entry && entry.countEl) {
+      if (typeof newCount === 'number') {
+        entry.countEl.textContent = newCount;
+      } else {
+        const cur = parseInt(entry.countEl.textContent || '0', 10) || 0;
+        entry.countEl.textContent = cur + 1;
       }
-      const countEl = btn.querySelector('.react-count');
-      if (countEl) {
-        if (typeof newCount === 'number') {
-          countEl.textContent = newCount;
-        } else {
-          const cur = parseInt(countEl.textContent || '0', 10) || 0;
-          countEl.textContent = cur + 1;
-        }
+    }
+  }
+
+  // Batched reaction network broadcasting to prevent socket message queue lag
+  let pendingReactionEmits = {};
+  let reactionBatchTimer = null;
+
+  function flushBatchedReactions() {
+    reactionBatchTimer = null;
+    if (!socket || !socket.connected) {
+      pendingReactionEmits = {};
+      return;
+    }
+    const toSend = pendingReactionEmits;
+    pendingReactionEmits = {};
+    for (const emoji in toSend) {
+      const count = toSend[emoji];
+      if (count > 0) {
+        socket.emit('send-reaction', { emoji, count });
       }
+    }
+  }
+
+  function queueReactionEmit(emoji) {
+    pendingReactionEmits[emoji] = (pendingReactionEmits[emoji] || 0) + 1;
+    if (!reactionBatchTimer) {
+      reactionBatchTimer = setTimeout(flushBatchedReactions, 80);
     }
   }
 
@@ -1911,10 +1937,8 @@
       triggerReactionPill(emoji);
       playUiTone('pop');
 
-      // 2. Broadcast to room via socket
-      if (socket && socket.connected) {
-        socket.emit('send-reaction', { emoji });
-      }
+      // 2. Queue reaction for batched network broadcast
+      queueReactionEmit(emoji);
     });
   });
 

@@ -816,26 +816,26 @@ body {
   -webkit-user-select: none;
   pointer-events: none;
   will-change: transform, opacity;
-  animation: floatUpAndFade 1.85s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
-  text-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
+  animation: floatUpAndFade 1.15s cubic-bezier(0.18, 0.85, 0.25, 1) forwards;
+  text-shadow: none !important;
 }
 
 @keyframes floatUpAndFade {
   0% {
     opacity: 0;
-    transform: translateY(0) scale(0.6) rotate(0deg);
+    transform: translate3d(0, 0, 0) scale(0.65);
   }
   15% {
     opacity: 1;
-    transform: translateY(-40px) scale(1.25) rotate(calc(var(--rand-rot, 0) * 1deg));
+    transform: translate3d(0, -35px, 0) scale(1.2);
   }
   75% {
     opacity: 0.9;
-    transform: translateY(-220px) scale(1) rotate(calc(var(--rand-rot, 0) * 1.8deg));
+    transform: translate3d(0, -180px, 0) scale(1);
   }
   100% {
     opacity: 0;
-    transform: translateY(-310px) scale(0.7) rotate(calc(var(--rand-rot, 0) * 2.5deg));
+    transform: translate3d(0, -250px, 0) scale(0.75);
   }
 }
 
@@ -1745,6 +1745,7 @@ video::cue {
   overflow-x: auto;
   scrollbar-width: none;
   -webkit-overflow-scrolling: touch;
+  touch-action: manipulation;
 }
 
 .reaction-bar::-webkit-scrollbar {
@@ -1764,7 +1765,7 @@ video::cue {
   font-family: inherit;
   font-size: 0.82rem;
   font-weight: 600;
-  transition: transform 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+  transition: transform 0.1s cubic-bezier(0.2, 0.8, 0.3, 1), background 0.1s ease;
   user-select: none;
   -webkit-user-select: none;
   touch-action: manipulation;
@@ -1778,19 +1779,12 @@ video::cue {
   transform: translateY(-2px) scale(1.05);
   background: rgba(255, 255, 255, 0.12);
   border-color: rgba(255, 255, 255, 0.28);
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
 }
 
-.react-pill-btn:active, .react-pill-btn.pill-bump {
-  animation: pillBumpAnim 0.18s ease-out;
+.react-pill-btn:active {
+  transform: scale(0.92);
   background: rgba(99, 102, 241, 0.25);
   border-color: var(--primary);
-}
-
-@keyframes pillBumpAnim {
-  0% { transform: scale(1); }
-  50% { transform: scale(1.15); }
-  100% { transform: scale(1); }
 }
 
 .react-pill-btn .react-emoji {
