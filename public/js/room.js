@@ -241,6 +241,25 @@
         gain.gain.exponentialRampToValueAtTime(0.001, now + 0.28);
         osc.start(now);
         osc.stop(now + 0.28);
+      } else if (type === 'poll') {
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(440, now);
+        osc.frequency.setValueAtTime(659.25, now + 0.1);
+        osc.frequency.setValueAtTime(880, now + 0.2);
+        gain.gain.setValueAtTime(0.09, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.36);
+        osc.start(now);
+        osc.stop(now + 0.36);
+      } else if (type === 'poll-results') {
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(523.25, now);
+        osc.frequency.setValueAtTime(659.25, now + 0.08);
+        osc.frequency.setValueAtTime(783.99, now + 0.16);
+        osc.frequency.setValueAtTime(1046.5, now + 0.24);
+        gain.gain.setValueAtTime(0.1, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
+        osc.start(now);
+        osc.stop(now + 0.45);
       }
     } catch (e) {
       // Audio autoplay restriction fallback
@@ -249,16 +268,16 @@
 
   // Famous Meme Sound Effects mapped to each emoji reaction
   const EMOJI_MEME_SOUNDS = {
-    '🏔️': '/sounds/peak.mp3',     // Peak Cinema / Inception Horn BRAAAAM
-    '🔥': '/sounds/fire.mp3',     // Bad to the Bone Guitar Riff
+    '🏔️': '/sounds/peak.mp3',     // Peak Cinema / Inception Horn BRAAAAM (3.0s)
+    '🔥': '/sounds/fire.mp3',     // Bad to the Bone Guitar Riff (2.3s)
     '❤️': '/sounds/love.mp3',     // Careless Whisper Saxophone
-    '😂': '/sounds/funny.mp3',    // "Bruh" sound effect
+    '😂': '/sounds/funny.mp3',    // "Oh no no no..." Wheezing Laugh Meme (3.2s)
     '😭': '/sounds/crying.mp3',   // Sad Hamster / Violin
     '🤯': '/sounds/blown.mp3',    // Vine Boom
     '😱': '/sounds/shocked.mp3',  // Metal Gear Solid Alert (!)
-    '👀': '/sounds/sus.mp3',      // Drip Sound Effect
-    '🗿': '/sounds/chad.mp3',     // Gigachad Theme Phonk
-    '💦': '/sounds/drip.mp3',     // Drip
+    '👀': '/sounds/sus.mp3',      // Among Us / Sus Effect
+    '🗿': '/sounds/chad.mp3',     // Gigachad Phonk Opening Drop (3.2s)
+    '💦': '/sounds/drip.mp3',     // Goku Drip / Supreme Trap Beat Drop (3.3s)
     'peak': '/sounds/peak.mp3',
     'fire': '/sounds/fire.mp3',
     'love': '/sounds/love.mp3',
@@ -455,6 +474,11 @@
       renderMembers(roomState.users);
       loadVideoSource(roomState.currentVideo, roomState.playback.currentTime, roomState.playback.state === 'playing');
 
+      // Sync active poll if present
+      if (data.room.activePoll && !data.room.activePoll.isClosed) {
+        handleIncomingPoll(data.room.activePoll);
+      }
+
       // Sync reaction counts from room state
       if (data.room.reactionCounts) {
         for (const [em, cnt] of Object.entries(data.room.reactionCounts)) {
@@ -595,6 +619,10 @@
     });
 
     socket.on('new-message', (msg) => {
+      if (roomState) {
+        if (!roomState.messages) roomState.messages = [];
+        roomState.messages.push(msg);
+      }
       appendToSavedLocalChat(msg);
       appendChatMessage(msg);
       playUiTone('chat');
@@ -666,6 +694,35 @@
         appendToSavedLocalChat(message);
         appendChatMessage(message);
       }
+    });
+
+    // Live Room Poll Socket Listeners
+    socket.on('poll-started', ({ poll, message }) => {
+      handleIncomingPoll(poll);
+      if (message) {
+        appendToSavedLocalChat(message);
+        appendChatMessage(message);
+      }
+    });
+
+    socket.on('poll-vote-confirmed', ({ pollId, optionId, totalVotes }) => {
+      handleVoteConfirmed(pollId, optionId, totalVotes);
+    });
+
+    socket.on('poll-vote-update', ({ pollId, totalVotes, hostOptions }) => {
+      handlePollVoteUpdate(pollId, totalVotes, hostOptions);
+    });
+
+    socket.on('poll-results-revealed', (resultsData) => {
+      handlePollResultsRevealed(resultsData);
+      if (resultsData.message) {
+        appendToSavedLocalChat(resultsData.message);
+        appendChatMessage(resultsData.message);
+      }
+    });
+
+    socket.on('poll-closed', ({ pollId }) => {
+      handlePollClosed(pollId);
     });
 
     socket.on('error-msg', ({ message }) => {
@@ -1495,6 +1552,16 @@
       if (hostPill) {
         hostPill.innerHTML = `<span>${escapeHtml(roomState?.name || 'Party')}</span> <span class="member-badge" style="margin-left: 6px;">👑 You (Host)</span>`;
       }
+    }
+
+    // Toggle Host-only Poll buttons
+    const btnOpenCreatePoll = document.getElementById('btn-open-create-poll');
+    const btnChatPollTrigger = document.getElementById('btn-chat-poll-trigger');
+    if (btnOpenCreatePoll) btnOpenCreatePoll.style.display = isHost ? 'inline-flex' : 'none';
+    if (btnChatPollTrigger) btnChatPollTrigger.style.display = isHost ? 'inline-flex' : 'none';
+
+    if (currentActivePoll) {
+      renderPollCards();
     }
 
     updateEndSessionModalContent(isHost);
@@ -2968,6 +3035,9 @@
     const isMax = isPlayerMaximizedOrFullscreen();
     if (floatingChatOverlay) {
       floatingChatOverlay.style.display = (enabled && isMax) ? 'flex' : 'none';
+      if (enabled && isMax) {
+        if (typeof renderFloatingPollCard === 'function') renderFloatingPollCard();
+      }
     }
     if (!enabled && floatingQuickChatForm) {
       floatingQuickChatForm.style.display = 'none';
@@ -3005,6 +3075,8 @@
       } else {
         // Chat is hidden: tap msg icon to show messages and open quick input
         setOverlayChatEnabled(true);
+        syncRecentOverlayMessages();
+        if (typeof renderFloatingPollCard === 'function') renderFloatingPollCard();
         if (floatingQuickChatForm && floatingQuickChatInput) {
           syncDraftChatText(chatInput);
           floatingQuickChatForm.style.display = 'flex';
@@ -3101,6 +3173,7 @@
     if (isFull) {
       showControls(3000);
       syncRecentOverlayMessages();
+      if (typeof renderFloatingPollCard === 'function') renderFloatingPollCard();
       // Synchronize text from minimize into maximize
       syncDraftChatText(chatInput);
       if (floatingQuickChatInput && floatingQuickChatInput.value.trim().length > 0) {
@@ -3112,6 +3185,8 @@
       if (floatingQuickChatForm) floatingQuickChatForm.style.display = 'none';
       if (floatingChatStream) floatingChatStream.innerHTML = '';
       if (floatingMentionController) floatingMentionController.close();
+      const floatingContainer = document.getElementById('floating-poll-container');
+      if (floatingContainer) floatingContainer.style.display = 'none';
     }
   }
 
@@ -3132,20 +3207,24 @@
     if (!floatingChatStream) return;
     floatingChatStream.innerHTML = '';
     const now = Date.now();
-    if (roomState && Array.isArray(roomState.messages)) {
-      // ONLY messages sent within the last 45 seconds (45,000 ms)
-      const recent45s = roomState.messages.filter(m => {
-        if (m.system || !m.text) return false;
-        const msgTime = m.timestamp || now;
-        return (now - msgTime) < 45000;
-      });
 
-      recent45s.forEach(m => {
-        const elapsed = now - (m.timestamp || now);
-        const remainingTtl = Math.max(1500, 45000 - elapsed);
-        appendFloatingOverlayMessage(m, true, remainingTtl);
-      });
-    }
+    // Check both local storage cached chat and current roomState.messages
+    const localChat = (typeof getSavedLocalChat === 'function' ? getSavedLocalChat() : []) || [];
+    const stateChat = (roomState && Array.isArray(roomState.messages)) ? roomState.messages : [];
+    const allMessages = (typeof mergeChatLists === 'function') ? mergeChatLists(stateChat, localChat) : localChat;
+
+    // ONLY non-system messages sent within the last 45 seconds (45,000 ms)
+    const recent45s = allMessages.filter(m => {
+      if (!m || m.system || !m.text) return false;
+      const msgTime = m.timestamp || 0;
+      return (now - msgTime) <= 45000 && (now - msgTime) >= 0;
+    });
+
+    recent45s.forEach(m => {
+      const elapsed = now - (m.timestamp || now);
+      const remainingTtl = Math.max(1500, 45000 - elapsed);
+      appendFloatingOverlayMessage(m, true, remainingTtl);
+    });
   }
 
   // Append a transparent floating message directly over the video (ONLY in fullscreen / maximized mode)
@@ -3576,6 +3655,544 @@
       document.getElementById(modalId)?.classList.remove('open');
     });
   });
+
+  // =========================================================================
+  // Live Room Poll System (Host Only Creation & Multi-Viewer Sync)
+  // =========================================================================
+  let currentActivePoll = null;
+  let pollCountdownTimer = null;
+  let selectedPollOptionId = null;
+  let tentativePollOptionId = null;
+  let hasVotedCurrentPoll = false;
+  let isPollCollapsed = false;
+
+  function initLivePollModule() {
+    const btnOpenCreatePoll = document.getElementById('btn-open-create-poll');
+    const btnChatPollTrigger = document.getElementById('btn-chat-poll-trigger');
+    const chatPollCreator = document.getElementById('chat-poll-creator-container');
+    const inlineQuestionInput = document.getElementById('inline-poll-question');
+    const inlineOptionsList = document.getElementById('inline-poll-options-list');
+    const inlineDurationChips = document.querySelectorAll('#inline-poll-duration-chips .poll-dur-chip');
+    const inlineCustomDuration = document.getElementById('inline-poll-custom-duration');
+    const inlineForm = document.getElementById('inline-create-poll-form');
+
+    const openInlineCreator = () => {
+      if (!currentUser?.isHost) {
+        showToast('⚠️ Only the room host can create and send polls.');
+        return;
+      }
+      // Ensure chat tab is active
+      const chatTabBtn = document.querySelector('.sidebar-tabs [data-tab="tab-chat"]');
+      if (chatTabBtn && !chatTabBtn.classList.contains('active')) {
+        chatTabBtn.click();
+      }
+      if (chatPollCreator) {
+        chatPollCreator.style.display = 'block';
+        inlineQuestionInput?.focus();
+      }
+    };
+
+    const closeInlineCreator = () => {
+      if (chatPollCreator) chatPollCreator.style.display = 'none';
+    };
+
+    btnOpenCreatePoll?.addEventListener('click', openInlineCreator);
+    btnChatPollTrigger?.addEventListener('click', openInlineCreator);
+    document.getElementById('btn-cancel-create-poll')?.addEventListener('click', closeInlineCreator);
+    document.getElementById('btn-inline-poll-cancel')?.addEventListener('click', closeInlineCreator);
+
+    // Duration preset chips
+    inlineDurationChips.forEach(chip => {
+      chip.addEventListener('click', () => {
+        inlineDurationChips.forEach(c => c.classList.remove('selected'));
+        chip.classList.add('selected');
+        if (inlineCustomDuration) inlineCustomDuration.value = chip.dataset.sec;
+      });
+    });
+
+    if (inlineCustomDuration) {
+      inlineCustomDuration.addEventListener('input', (e) => {
+        const val = e.target.value;
+        inlineDurationChips.forEach(chip => {
+          if (chip.dataset.sec === val) {
+            chip.classList.add('selected');
+          } else {
+            chip.classList.remove('selected');
+          }
+        });
+      });
+    }
+
+    // Dynamic Add Option in Inline Form
+    const btnAddOption = document.getElementById('btn-inline-add-opt');
+    if (btnAddOption && inlineOptionsList) {
+      btnAddOption.addEventListener('click', () => {
+        const currentCount = inlineOptionsList.querySelectorAll('.inline-opt-row').length;
+        if (currentCount >= 6) {
+          showToast('⚠️ Maximum 6 options allowed per poll.');
+          return;
+        }
+        const row = document.createElement('div');
+        row.className = 'inline-opt-row';
+        row.style.cssText = 'display: flex; gap: 0.35rem; align-items: center;';
+        row.innerHTML = `
+          <input type="text" class="input-field inline-poll-opt" placeholder="Option ${currentCount + 1}" required maxlength="80" style="padding: 0.4rem 0.65rem; font-size: 0.82rem;">
+          <button type="button" class="btn btn-ghost btn-xs btn-remove-option" title="Remove" style="color: #f87171; font-weight: 700; padding: 0.2rem 0.4rem;">✕</button>
+        `;
+        row.querySelector('.btn-remove-option')?.addEventListener('click', () => {
+          row.remove();
+        });
+        inlineOptionsList.appendChild(row);
+        row.querySelector('input')?.focus();
+      });
+    }
+
+    // Inline Form submission
+    if (inlineForm) {
+      inlineForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        if (!currentUser?.isHost) {
+          showToast('⚠️ Only hosts can launch polls.');
+          return;
+        }
+
+        const question = inlineQuestionInput?.value.trim();
+        if (!question) {
+          showToast('⚠️ Please enter a poll question.');
+          return;
+        }
+
+        const optionInputs = inlineOptionsList ? inlineOptionsList.querySelectorAll('.inline-poll-opt') : [];
+        const options = Array.from(optionInputs)
+          .map(input => input.value.trim())
+          .filter(val => val.length > 0);
+
+        if (options.length < 2) {
+          showToast('⚠️ Please provide at least 2 options.');
+          return;
+        }
+
+        let durationSeconds = parseInt(inlineCustomDuration?.value, 10) || 30;
+        durationSeconds = Math.max(5, Math.min(600, durationSeconds));
+
+        if (socket) {
+          socket.emit('create-poll', {
+            question,
+            options,
+            durationSeconds
+          });
+          showToast('🚀 Live poll sent to all room members!');
+        }
+
+        closeInlineCreator();
+
+        // Reset form fields
+        if (inlineQuestionInput) inlineQuestionInput.value = '';
+        if (inlineOptionsList) {
+          inlineOptionsList.innerHTML = `
+            <div class="inline-opt-row" style="display: flex; gap: 0.35rem; align-items: center;">
+              <input type="text" class="input-field inline-poll-opt" placeholder="Option 1" required maxlength="80" style="padding: 0.4rem 0.65rem; font-size: 0.82rem;">
+            </div>
+            <div class="inline-opt-row" style="display: flex; gap: 0.35rem; align-items: center;">
+              <input type="text" class="input-field inline-poll-opt" placeholder="Option 2" required maxlength="80" style="padding: 0.4rem 0.65rem; font-size: 0.82rem;">
+            </div>
+          `;
+        }
+      });
+    }
+  }
+
+  function handleIncomingPoll(pollData) {
+    if (!pollData || pollData.isClosed) {
+      handlePollClosed(pollData?.id);
+      return;
+    }
+
+    currentActivePoll = pollData;
+    hasVotedCurrentPoll = Boolean(pollData.hasVoted);
+    selectedPollOptionId = pollData.votedOptionId ?? null;
+    isPollCollapsed = false;
+
+    // Automatically close creator if open
+    const chatPollCreator = document.getElementById('chat-poll-creator-container');
+    if (chatPollCreator) chatPollCreator.style.display = 'none';
+
+    // Switch to Chat tab so viewers see the poll immediately alongside the video
+    const chatTabBtn = document.querySelector('.sidebar-tabs [data-tab="tab-chat"]');
+    if (chatTabBtn && !chatTabBtn.classList.contains('active')) {
+      chatTabBtn.click();
+    }
+
+    playUiTone('poll');
+
+    renderPollCards();
+    startPollCountdown();
+  }
+
+  function startPollCountdown() {
+    if (pollCountdownTimer) clearInterval(pollCountdownTimer);
+
+    const updateTimer = () => {
+      if (!currentActivePoll) {
+        clearInterval(pollCountdownTimer);
+        return;
+      }
+
+      const now = Date.now();
+      const remainingMs = currentActivePoll.endsAt - now;
+      const remainingSec = Math.max(0, Math.ceil(remainingMs / 1000));
+
+      const timerBadges = document.querySelectorAll('.poll-timer-display');
+      timerBadges.forEach(badge => {
+        if (currentActivePoll.resultsRevealed) {
+          badge.textContent = '✓ Results';
+          badge.classList.remove('ended');
+        } else if (remainingSec > 0) {
+          badge.textContent = `⏱️ ${remainingSec}s`;
+          badge.classList.remove('ended');
+        } else {
+          badge.textContent = '⏱️ Ended';
+          badge.classList.add('ended');
+        }
+      });
+
+      if (remainingSec <= 0 && !currentActivePoll.resultsRevealed) {
+        const votingNotices = document.querySelectorAll('.poll-status-msg');
+        votingNotices.forEach(notice => {
+          if (!hasVotedCurrentPoll) {
+            notice.textContent = '⏱️ Voting closed. Waiting for host to reveal results...';
+          }
+        });
+      }
+    };
+
+    updateTimer();
+    pollCountdownTimer = setInterval(updateTimer, 1000);
+  }
+
+  function renderPollCards() {
+    renderChatPollCard();
+    renderFloatingPollCard();
+  }
+
+  function renderFloatingPollCard() {
+    const floatingContainer = document.getElementById('floating-poll-container');
+    if (!floatingContainer) return;
+
+    if (!currentActivePoll || currentActivePoll.isClosed) {
+      floatingContainer.style.display = 'none';
+      floatingContainer.innerHTML = '';
+      return;
+    }
+
+    const isMax = isPlayerMaximizedOrFullscreen();
+    if (!isMax || !isOverlayChatEnabled) {
+      floatingContainer.style.display = 'none';
+      return;
+    }
+
+    floatingContainer.style.display = 'block';
+    floatingContainer.innerHTML = buildPollCardHtml('floating');
+    attachPollCardEventListeners('floating');
+  }
+
+  function renderChatPollCard() {
+    const chatContainer = document.getElementById('chat-poll-pinned-container');
+    if (!chatContainer) return;
+
+    if (!currentActivePoll || currentActivePoll.isClosed) {
+      chatContainer.style.display = 'none';
+      chatContainer.innerHTML = '';
+      return;
+    }
+
+    chatContainer.style.display = 'block';
+    chatContainer.innerHTML = buildPollCardHtml('chat');
+    attachPollCardEventListeners('chat');
+  }
+
+  function buildPollCardHtml(location = 'chat') {
+    if (!currentActivePoll) return '';
+
+    const isHost = Boolean(currentUser?.isHost);
+    const now = Date.now();
+    const remainingSec = Math.max(0, Math.ceil((currentActivePoll.endsAt - now) / 1000));
+    const isTimeExpired = remainingSec <= 0;
+    const isRevealed = Boolean(currentActivePoll.resultsRevealed);
+    const totalVotes = currentActivePoll.totalVotes || 0;
+
+    let timerText = `⏱️ ${remainingSec}s`;
+    let timerClass = '';
+    if (isRevealed) {
+      timerText = '✓ Results';
+    } else if (isTimeExpired) {
+      timerText = '⏱️ Ended';
+      timerClass = 'ended';
+    }
+
+    // Build options HTML
+    const optionsHtml = (currentActivePoll.options || []).map(opt => {
+      const isSelected = selectedPollOptionId === opt.id;
+      const isWinner = isRevealed && opt.isWinner;
+      const pct = opt.percentage || 0;
+
+      let statDisplay = '';
+      let fillBar = '';
+
+      if (isRevealed) {
+        fillBar = `<div class="poll-opt-fill-bar" style="width: ${pct}%;"></div>`;
+        statDisplay = `
+          <div class="poll-opt-stat">
+            <span>${pct}%</span>
+            <span class="poll-opt-votes-sub">(${opt.votes || 0})</span>
+          </div>
+        `;
+      } else if (isHost) {
+        statDisplay = `
+          <div class="poll-opt-stat">
+            <span class="poll-opt-votes-sub">${opt.votes || 0} votes</span>
+          </div>
+        `;
+      }
+
+      const disabledClass = (hasVotedCurrentPoll || isTimeExpired || isRevealed) ? 'poll-opt-disabled' : '';
+
+      return `
+        <div class="poll-opt-card ${isSelected ? 'selected' : ''} ${isWinner ? 'winner' : ''} ${disabledClass}" data-option-id="${opt.id}" data-location="${location}">
+          ${fillBar}
+          <div class="poll-opt-content">
+            <div class="poll-opt-label-wrap">
+              <span class="poll-opt-radio">${isSelected ? '✓' : ''}</span>
+              <span class="poll-opt-text">${escapeHtml(opt.text)}</span>
+              ${isWinner ? '<span class="poll-winner-badge">👑 Winner</span>' : ''}
+            </div>
+            ${statDisplay}
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    // Status Message
+    let statusMsg = '';
+    if (isRevealed) {
+      statusMsg = `<span style="color: #c084fc; font-weight: 600;">🎉 Results Revealed! (${totalVotes} total votes)</span>`;
+    } else if (hasVotedCurrentPoll) {
+      statusMsg = `<div class="poll-voted-notice"><span>✓</span><span>Vote submitted! Waiting for host to reveal results...</span></div>`;
+    } else if (isTimeExpired) {
+      statusMsg = `<span class="poll-status-msg" style="color: var(--text-muted);">⏱️ Voting ended. Waiting for host to reveal results...</span>`;
+    } else {
+      statusMsg = `<span class="poll-status-msg" style="color: var(--text-secondary);">Tap an option to cast your vote</span>`;
+    }
+
+    // Host Action Bar (Prominent Show Result & Close buttons)
+    let hostControlsHtml = '';
+    if (isHost) {
+      if (!isRevealed) {
+        hostControlsHtml = `
+          <div class="poll-host-actions">
+            <button type="button" class="btn btn-sm btn-poll-reveal btn-trigger-reveal" data-poll-id="${currentActivePoll.id}">
+              <span>👁️ Show Results to Everyone</span>
+            </button>
+            <button type="button" class="btn btn-ghost btn-sm btn-poll-dismiss btn-trigger-close" data-poll-id="${currentActivePoll.id}">
+              <span>✕ Dismiss Poll</span>
+            </button>
+          </div>
+        `;
+      } else {
+        hostControlsHtml = `
+          <div class="poll-host-actions">
+            <button type="button" class="btn btn-secondary btn-sm btn-poll-dismiss btn-trigger-close" data-poll-id="${currentActivePoll.id}">
+              <span>✕ Close & Remove Poll for Everyone</span>
+            </button>
+          </div>
+        `;
+      }
+    }
+
+    const minimizeIcon = isPollCollapsed ? '▼' : '▲';
+
+    return `
+      <div class="live-poll-card ${isPollCollapsed ? 'poll-collapsed' : ''}" id="poll-card-${location}">
+        <div class="poll-header-row">
+          <div class="poll-badge-cluster">
+            <span class="poll-live-tag">
+              <span class="poll-pulse-dot"></span>
+              <span>Live Poll</span>
+            </span>
+            <span class="poll-timer-badge ${timerClass} poll-timer-display">${timerText}</span>
+          </div>
+
+          <div class="poll-header-controls">
+            <button type="button" class="poll-icon-btn btn-toggle-collapse" title="Collapse / Expand Poll">
+              ${minimizeIcon}
+            </button>
+            ${isHost ? `
+              <button type="button" class="poll-icon-btn btn-quick-close-poll" data-poll-id="${currentActivePoll.id}" title="Close Poll">
+                ✕
+              </button>
+            ` : ''}
+          </div>
+        </div>
+
+        <div class="poll-body">
+          <div class="poll-question-title">${escapeHtml(currentActivePoll.question)}</div>
+
+          <div class="poll-options-list">
+            ${optionsHtml}
+          </div>
+
+          <div class="poll-footer-meta">
+            <div>${statusMsg}</div>
+            <div style="font-weight: 600; color: var(--text-secondary);">${totalVotes} ${totalVotes === 1 ? 'vote' : 'votes'}</div>
+          </div>
+
+          ${hostControlsHtml}
+        </div>
+      </div>
+    `;
+  }
+
+  function attachPollCardEventListeners(location = 'chat') {
+    const rootId = location === 'floating' ? 'floating-poll-container' : 'chat-poll-pinned-container';
+    const root = document.getElementById(rootId);
+    if (!root) return;
+
+    // Option Voting Click
+    const optionCards = root.querySelectorAll('.poll-opt-card:not(.poll-opt-disabled)');
+    optionCards.forEach(card => {
+      card.addEventListener('click', () => {
+        if (hasVotedCurrentPoll) return;
+        const optId = parseInt(card.dataset.optionId, 10);
+        submitPollVote(optId);
+      });
+    });
+
+    // Reveal Results Button (Host Only)
+    const revealBtns = root.querySelectorAll('.btn-trigger-reveal');
+    revealBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        if (!currentUser?.isHost) return;
+        if (socket && currentActivePoll) {
+          socket.emit('reveal-poll-results', { pollId: currentActivePoll.id });
+          showToast('📊 Revealing results to all room members...');
+        }
+      });
+    });
+
+    // Close Poll Button (Host Only)
+    const closeBtns = root.querySelectorAll('.btn-trigger-close, .btn-quick-close-poll');
+    closeBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        if (!currentUser?.isHost) return;
+        if (socket && currentActivePoll) {
+          socket.emit('close-poll', { pollId: currentActivePoll.id });
+          showToast('Poll dismissed.');
+        }
+      });
+    });
+
+    // Collapse / Expand toggle
+    const collapseBtn = root.querySelector('.btn-toggle-collapse');
+    if (collapseBtn) {
+      collapseBtn.addEventListener('click', () => {
+        isPollCollapsed = !isPollCollapsed;
+        renderPollCards();
+      });
+    }
+  }
+
+  function submitPollVote(optionId) {
+    if (!currentActivePoll || hasVotedCurrentPoll) return;
+    const now = Date.now();
+    if (currentActivePoll.isClosed || now > currentActivePoll.endsAt + 1000) {
+      showToast('⚠️ Voting has already ended for this poll.');
+      return;
+    }
+
+    hasVotedCurrentPoll = true;
+    selectedPollOptionId = optionId;
+    currentActivePoll.totalVotes = (currentActivePoll.totalVotes || 0) + 1;
+
+    // Locally bump count for fast feedback
+    const opt = currentActivePoll.options.find(o => o.id === optionId);
+    if (opt) opt.votes = (opt.votes || 0) + 1;
+
+    playUiTone('pop');
+
+    if (socket) {
+      socket.emit('vote-poll', {
+        pollId: currentActivePoll.id,
+        optionId
+      });
+    }
+
+    renderPollCards();
+    showToast('✓ Vote submitted! Waiting for host to reveal results.');
+  }
+
+  function handleVoteConfirmed(pollId, optionId, totalVotes) {
+    if (!currentActivePoll || currentActivePoll.id !== pollId) return;
+    hasVotedCurrentPoll = true;
+    selectedPollOptionId = optionId;
+    currentActivePoll.totalVotes = totalVotes;
+    renderPollCards();
+  }
+
+  function handlePollVoteUpdate(pollId, totalVotes, hostOptions) {
+    if (!currentActivePoll || currentActivePoll.id !== pollId) return;
+    currentActivePoll.totalVotes = totalVotes;
+    if (currentUser?.isHost && hostOptions) {
+      currentActivePoll.options = hostOptions;
+    }
+    renderPollCards();
+  }
+
+  function handlePollResultsRevealed(resultsData) {
+    if (!currentActivePoll || currentActivePoll.id !== resultsData.pollId) {
+      currentActivePoll = {
+        id: resultsData.pollId,
+        question: resultsData.question,
+        options: resultsData.options,
+        totalVotes: resultsData.totalVotes,
+        resultsRevealed: true,
+        endsAt: Date.now()
+      };
+    } else {
+      currentActivePoll.resultsRevealed = true;
+      currentActivePoll.options = resultsData.options;
+      currentActivePoll.totalVotes = resultsData.totalVotes;
+    }
+
+    if (pollCountdownTimer) clearInterval(pollCountdownTimer);
+
+    playUiTone('poll-results');
+    showToast(`📊 Poll results revealed by ${resultsData.revealedBy || 'Host'}!`);
+
+    renderPollCards();
+  }
+
+  function handlePollClosed(pollId) {
+    if (pollCountdownTimer) clearInterval(pollCountdownTimer);
+
+    const chatContainer = document.getElementById('chat-poll-pinned-container');
+    if (chatContainer) {
+      chatContainer.style.display = 'none';
+      chatContainer.innerHTML = '';
+    }
+
+    const floatingContainer = document.getElementById('floating-poll-container');
+    if (floatingContainer) {
+      floatingContainer.style.display = 'none';
+      floatingContainer.innerHTML = '';
+    }
+
+    currentActivePoll = null;
+    hasVotedCurrentPoll = false;
+    selectedPollOptionId = null;
+  }
+
+  // Initialize Poll UI Module
+  initLivePollModule();
 
   // Helpers
   function isYoutubeUrl(url) {

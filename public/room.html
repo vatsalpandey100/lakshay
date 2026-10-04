@@ -60,6 +60,10 @@
       </div>
 
       <div class="nav-actions">
+        <button type="button" class="btn btn-secondary btn-sm nav-btn-poll" id="btn-open-create-poll" title="Create Live Poll (Host Only)" style="display: none;">
+          <span class="nav-btn-icon">📊</span>
+          <span class="nav-btn-label">Create Poll</span>
+        </button>
         <button type="button" class="btn btn-secondary btn-sm nav-btn-share" id="btn-open-share" title="Share Party Link">
           <span class="nav-btn-icon">🔗</span>
           <span class="nav-btn-label">Share Party</span>
@@ -136,6 +140,9 @@
 
             <!-- Floating Transparent On-Video Chat Overlay (Fullscreen / Maximized) -->
             <div class="video-floating-chat-overlay" id="video-floating-chat-overlay">
+              <!-- Live Poll Overlay in Fullscreen / Maximized mode -->
+              <div class="floating-poll-container" id="floating-poll-container" style="display: none;"></div>
+
               <div class="floating-chat-stream" id="floating-chat-stream">
                 <!-- Pure floating messages directly over the video with NO background, NO box, NO blur layer -->
               </div>
@@ -396,6 +403,74 @@
 
         <!-- Chat Pane -->
         <div class="tab-pane active" id="tab-chat">
+          <div class="chat-tab-header">
+            <span class="chat-tab-title">💬 Live Room Chat</span>
+            <button type="button" class="btn btn-secondary btn-xs btn-chat-poll" id="btn-chat-poll-trigger" title="Create Live Poll (Host Only)" style="display: none;">
+              <span>📊 Create Poll</span>
+            </button>
+          </div>
+
+          <!-- Inline Poll Creator Card at Top of Chat Menu (Video + Poll Creation both visible!) -->
+          <div class="chat-poll-creator-container" id="chat-poll-creator-container" style="display: none;">
+            <div class="poll-creator-card">
+              <div class="poll-creator-header">
+                <div style="display: flex; align-items: center; gap: 0.45rem;">
+                  <span style="font-size: 1rem;">📊</span>
+                  <span style="font-size: 0.88rem; font-weight: 700; color: #fff;">Create Live Room Poll</span>
+                </div>
+                <button type="button" class="poll-icon-btn" id="btn-cancel-create-poll" title="Close Creator">✕</button>
+              </div>
+
+              <form id="inline-create-poll-form" style="display: flex; flex-direction: column; gap: 0.65rem; margin-top: 0.4rem;">
+                <div>
+                  <label class="form-label" style="font-size: 0.76rem; margin-bottom: 0.25rem;">Question</label>
+                  <input type="text" id="inline-poll-question" class="input-field" placeholder="e.g. Which fight was crazier?" required maxlength="180" style="padding: 0.45rem 0.65rem; font-size: 0.84rem;">
+                </div>
+
+                <div>
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem;">
+                    <label class="form-label" style="font-size: 0.76rem; margin-bottom: 0;">Options</label>
+                    <button type="button" class="btn btn-ghost btn-xs" id="btn-inline-add-opt" style="color: var(--accent-purple); padding: 0; font-size: 0.75rem; font-weight: 600;">+ Add Option</button>
+                  </div>
+                  <div id="inline-poll-options-list" style="display: flex; flex-direction: column; gap: 0.4rem;">
+                    <div class="inline-opt-row" style="display: flex; gap: 0.35rem; align-items: center;">
+                      <input type="text" class="input-field inline-poll-opt" placeholder="Option 1" required maxlength="80" style="padding: 0.4rem 0.65rem; font-size: 0.82rem;">
+                    </div>
+                    <div class="inline-opt-row" style="display: flex; gap: 0.35rem; align-items: center;">
+                      <input type="text" class="input-field inline-poll-opt" placeholder="Option 2" required maxlength="80" style="padding: 0.4rem 0.65rem; font-size: 0.82rem;">
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <label class="form-label" style="font-size: 0.76rem; margin-bottom: 0.25rem;">Duration</label>
+                  <div class="poll-duration-chips" id="inline-poll-duration-chips" style="gap: 0.3rem;">
+                    <button type="button" class="poll-dur-chip" data-sec="15" style="padding: 0.22rem 0.55rem; font-size: 0.75rem;">15s</button>
+                    <button type="button" class="poll-dur-chip selected" data-sec="30" style="padding: 0.22rem 0.55rem; font-size: 0.75rem;">30s</button>
+                    <button type="button" class="poll-dur-chip" data-sec="45" style="padding: 0.22rem 0.55rem; font-size: 0.75rem;">45s</button>
+                    <button type="button" class="poll-dur-chip" data-sec="60" style="padding: 0.22rem 0.55rem; font-size: 0.75rem;">60s</button>
+                    <button type="button" class="poll-dur-chip" data-sec="120" style="padding: 0.22rem 0.55rem; font-size: 0.75rem;">120s</button>
+                  </div>
+                  <div style="display: flex; align-items: center; gap: 0.45rem; margin-top: 0.4rem;">
+                    <span style="font-size: 0.75rem; color: var(--text-secondary);">Custom seconds:</span>
+                    <input type="number" id="inline-poll-custom-duration" class="input-field" style="width: 75px; padding: 0.25rem 0.5rem; font-size: 0.8rem;" min="5" max="600" value="30">
+                    <span style="font-size: 0.75rem; color: var(--text-muted);">sec</span>
+                  </div>
+                </div>
+
+                <div style="display: flex; gap: 0.5rem; margin-top: 0.35rem;">
+                  <button type="button" class="btn btn-secondary btn-sm" id="btn-inline-poll-cancel" style="flex: 1; padding: 0.4rem; font-size: 0.8rem; justify-content: center;">Cancel</button>
+                  <button type="submit" class="btn btn-primary btn-sm" style="flex: 2; padding: 0.4rem; font-size: 0.82rem; justify-content: center; gap: 0.35rem;">
+                    <span>🚀 Launch Poll</span>
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+
+          <!-- Active Live Poll Card at Top of Chat Menu (Single Docked Placement!) -->
+          <div class="chat-poll-pinned-container" id="chat-poll-pinned-container" style="display: none;"></div>
+
           <div class="chat-messages-container" id="chat-messages-list">
             <!-- Messages rendered dynamically -->
           </div>

@@ -1,123 +1,140 @@
-// Landing page scripts
+// Landing page interactive scripts for Lakshay
 document.addEventListener('DOMContentLoaded', () => {
   // Setup avatar selectors
-  setupAvatarSelector('create-avatar-grid');
-  setupAvatarSelector('join-avatar-grid');
+  setupAvatarSelector('create-avatar-grid', 'create-avatar-upload');
+  setupAvatarSelector('join-avatar-grid', 'join-avatar-upload');
 
-  // Load existing avatar from localStorage if previously used
-  const savedAvatar = localStorage.getItem('syncpulse_avatar');
+  // Keep inputs empty with placeholders - no autofill
 
-  // Remove prefilled 'Vatsal' or default name so the input is completely clean
-  let savedName = localStorage.getItem('syncpulse_username');
-  if (savedName && (savedName.trim().toLowerCase() === 'vatsal' || savedName.trim().toLowerCase() === 'lakshay')) {
-    localStorage.removeItem('syncpulse_username');
-    savedName = null;
-  }
-  const cleanSavedName = savedName || '';
-
-  const createNameInput = document.getElementById('create-user-name');
-  if (createNameInput) {
-    createNameInput.value = cleanSavedName;
-  }
-
-  const joinNameInput = document.getElementById('join-user-name');
-  if (joinNameInput) {
-    joinNameInput.value = cleanSavedName;
-  }
-
-  if (savedAvatar) {
-    selectAvatar('create-avatar-grid', savedAvatar);
-    selectAvatar('join-avatar-grid', savedAvatar);
-  } else {
-    selectAvatar('create-avatar-grid', '🍿');
-  }
 
   // Handle Create Room
   const createForm = document.getElementById('create-room-form');
-  createForm.addEventListener('submit', (e) => {
-    e.preventDefault();
-    const roomName = document.getElementById('create-room-name').value.trim() || 'Anime Cinema Party';
-    const username = document.getElementById('create-user-name').value.trim();
-    if (!username) {
-      showToast('Please enter your nickname!');
-      document.getElementById('create-user-name')?.focus();
-      return;
-    }
-    const avatar = getSelectedAvatar('create-avatar-grid') || '🍿';
+  if (createForm) {
+    createForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const roomName = document.getElementById('create-room-name').value.trim() || 'Watch Party';
+      const username = document.getElementById('create-user-name').value.trim();
+      const avatar = getSelectedAvatar('create-avatar-grid') || '🍿';
 
-    // Save profile
-    localStorage.setItem('syncpulse_username', username);
-    localStorage.setItem('syncpulse_avatar', avatar);
+      if (!username) {
+        showToast('Please enter your nickname!');
+        document.getElementById('create-user-name')?.focus();
+        return;
+      }
 
-    // Generate readable random room code
-    const adjectives = ['cosmic', 'neon', 'cyber', 'velvet', 'stellar', 'midnight', 'retro', 'astral', 'hyper', 'pulse'];
-    const nouns = ['cinema', 'lounge', 'theater', 'nexus', 'station', 'club', 'hub', 'orbit', 'haven', 'vault'];
-    const randCode = `${adjectives[Math.floor(Math.random() * adjectives.length)]}-${nouns[Math.floor(Math.random() * nouns.length)]}-${Math.floor(Math.random() * 899 + 100)}`;
+      // Save profile
+      localStorage.setItem('syncpulse_username', username);
+      localStorage.setItem('syncpulse_avatar', avatar);
 
-    const hostToken = `host-tok-${Date.now()}-${Math.random().toString(36).substr(2, 8)}`;
-    localStorage.setItem(`lakshay_host_token_${randCode}`, hostToken);
-    sessionStorage.setItem('syncpulse_host_token', hostToken);
-    sessionStorage.setItem('syncpulse_is_creating', 'true');
-    sessionStorage.setItem('syncpulse_room_name', roomName);
+      // Generate readable random room code
+      const adjectives = ['cosmic', 'neon', 'cyber', 'velvet', 'stellar', 'midnight', 'retro', 'astral', 'hyper', 'pulse'];
+      const nouns = ['cinema', 'lounge', 'theater', 'nexus', 'station', 'club', 'hub', 'orbit', 'haven', 'vault'];
+      const randCode = `${adjectives[Math.floor(Math.random() * adjectives.length)]}-${nouns[Math.floor(Math.random() * nouns.length)]}-${Math.floor(Math.random() * 899 + 100)}`;
 
-    window.location.href = `/room/${randCode}`;
-  });
+      const hostToken = `host-tok-${Date.now()}-${Math.random().toString(36).substr(2, 8)}`;
+      localStorage.setItem(`lakshay_host_token_${randCode}`, hostToken);
+      sessionStorage.setItem('syncpulse_host_token', hostToken);
+      sessionStorage.setItem('syncpulse_is_creating', 'true');
+      sessionStorage.setItem('syncpulse_room_name', roomName);
+
+      window.location.href = `/room/${randCode}`;
+    });
+  }
 
   // Handle Join Room
   const joinForm = document.getElementById('join-room-form');
-  joinForm.addEventListener('submit', (e) => {
-    e.preventDefault();
-    let roomInput = document.getElementById('join-room-code').value.trim();
-    const username = document.getElementById('join-user-name').value.trim();
-    const avatar = getSelectedAvatar('join-avatar-grid');
+  if (joinForm) {
+    joinForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      let roomInput = document.getElementById('join-room-code').value.trim();
+      const username = document.getElementById('join-user-name').value.trim();
+      const avatar = getSelectedAvatar('join-avatar-grid') || '🍿';
 
-    if (!roomInput) {
-      showToast('Please enter a room code or invite URL!');
-      return;
-    }
+      if (!roomInput) {
+        showToast('Please enter a room code or invite URL!');
+        document.getElementById('join-room-code')?.focus();
+        return;
+      }
 
-    if (!username) {
-      showToast('Please enter your nickname!');
-      return;
-    }
+      if (!username) {
+        showToast('Please enter your nickname!');
+        document.getElementById('join-user-name')?.focus();
+        return;
+      }
 
-    // Save profile
-    localStorage.setItem('syncpulse_username', username);
-    localStorage.setItem('syncpulse_avatar', avatar);
+      // Save profile
+      localStorage.setItem('syncpulse_username', username);
+      localStorage.setItem('syncpulse_avatar', avatar);
 
-    // Extract room ID if full URL pasted
-    if (roomInput.includes('/room/')) {
-      const parts = roomInput.split('/room/');
-      roomInput = parts[1].split('?')[0].split('#')[0];
-    }
+      // Extract room ID if full URL pasted
+      if (roomInput.includes('/room/')) {
+        const parts = roomInput.split('/room/');
+        roomInput = parts[1].split('?')[0].split('#')[0];
+      }
 
-    // Remove unwanted query parameters or trailing slashes
-    roomInput = roomInput.replace(/\/+$/, '');
+      // Remove unwanted query parameters or trailing slashes
+      roomInput = roomInput.replace(/\/+$/, '');
 
-    window.location.href = `/room/${encodeURIComponent(roomInput)}`;
-  });
+      window.location.href = `/room/${encodeURIComponent(roomInput)}`;
+    });
+  }
 
   // Fetch Public Rooms
   fetchPublicRooms();
+  setInterval(fetchPublicRooms, 8000);
 });
 
-function setupAvatarSelector(gridId) {
+function setupAvatarSelector(gridId, uploadInputId) {
   const grid = document.getElementById(gridId);
   if (!grid) return;
+
   grid.addEventListener('click', (e) => {
-    const btn = e.target.closest('.avatar-choice');
+    const btn = e.target.closest('.avatar-circle-opt:not(.avatar-add-btn)');
     if (!btn) return;
-    grid.querySelectorAll('.avatar-choice').forEach(b => b.classList.remove('selected'));
+    grid.querySelectorAll('.avatar-circle-opt').forEach(b => b.classList.remove('selected'));
     btn.classList.add('selected');
   });
+
+  // Handle custom upload if present
+  if (uploadInputId) {
+    const uploadInput = document.getElementById(uploadInputId);
+    if (uploadInput) {
+      uploadInput.addEventListener('change', (e) => {
+        const file = e.target.files && e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          const dataUrl = event.target.result;
+          
+          // Check if custom avatar button already exists
+          let customBtn = grid.querySelector('.avatar-circle-opt.custom-uploaded-avatar');
+          if (!customBtn) {
+            customBtn = document.createElement('button');
+            customBtn.type = 'button';
+            customBtn.className = 'avatar-circle-opt custom-uploaded-avatar';
+            const addBtn = grid.querySelector('.avatar-add-btn');
+            grid.insertBefore(customBtn, addBtn);
+          }
+          customBtn.dataset.emoji = dataUrl;
+          customBtn.innerHTML = `<img src="${dataUrl}" alt="Custom Avatar">`;
+
+          grid.querySelectorAll('.avatar-circle-opt').forEach(b => b.classList.remove('selected'));
+          customBtn.classList.add('selected');
+          showToast('Custom avatar uploaded!');
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+  }
 }
 
 function selectAvatar(gridId, emoji) {
   const grid = document.getElementById(gridId);
   if (!grid) return;
-  const match = Array.from(grid.querySelectorAll('.avatar-choice')).find(b => b.dataset.emoji === emoji);
+  const match = Array.from(grid.querySelectorAll('.avatar-circle-opt')).find(b => b.dataset.emoji === emoji);
   if (match) {
-    grid.querySelectorAll('.avatar-choice').forEach(b => b.classList.remove('selected'));
+    grid.querySelectorAll('.avatar-circle-opt').forEach(b => b.classList.remove('selected'));
     match.classList.add('selected');
   }
 }
@@ -125,7 +142,7 @@ function selectAvatar(gridId, emoji) {
 function getSelectedAvatar(gridId) {
   const grid = document.getElementById(gridId);
   if (!grid) return '🍿';
-  const selected = grid.querySelector('.avatar-choice.selected');
+  const selected = grid.querySelector('.avatar-circle-opt.selected');
   return selected ? selected.dataset.emoji : '🍿';
 }
 
@@ -137,39 +154,68 @@ async function fetchPublicRooms() {
     const res = await fetch('/api/rooms');
     const data = await res.json();
 
-    if (!data.rooms || data.rooms.length === 0) {
+    if (data.rooms && data.rooms.length > 0) {
+      container.innerHTML = data.rooms.map(room => {
+        const thumbUrl = room.currentVideo?.thumbnail || '/lounge-thumb.jpg';
+        const videoTitle = room.currentVideo?.title || 'Watch Party Video';
+        const roomName = room.name || `Party ${room.id}`;
+        const hostName = room.hostName || 'Host';
+        const watchers = room.userCount || 1;
+
+        // Generate avatar cluster
+        const defaultAvatars = ['/avatars/luffy.jpg', '/avatars/ichigo.jpg', '/avatars/gojo.jpg', '/avatars/miku.jpg'];
+        const userAvatars = (room.avatars && room.avatars.length > 0) ? room.avatars : defaultAvatars;
+        const avatarImgs = userAvatars.slice(0, 4).map(av => {
+          if (typeof av === 'string' && (av.startsWith('/') || av.startsWith('http') || av.startsWith('data:'))) {
+            return `<img src="${escapeHtml(av)}" alt="Member">`;
+          }
+          return `<span class="participant-avatar-emoji">${escapeHtml(av || '🍿')}</span>`;
+        }).join('');
+
+        return `
+          <div class="lounge-wide-card">
+            <div class="lounge-thumb-wrap">
+              <img src="${escapeHtml(thumbUrl)}" alt="${escapeHtml(roomName)}" class="lounge-thumb-img" onerror="this.src='/lounge-thumb.jpg'">
+              <span class="lounge-live-badge">LIVE</span>
+            </div>
+            <div class="lounge-info-content">
+              <div class="lounge-name-row">
+                <h3 class="lounge-name">${escapeHtml(roomName)}</h3>
+                <span class="lounge-watchers-badge">
+                  <span class="lounge-watchers-spark">✦</span> ${watchers} watching
+                </span>
+              </div>
+              <div class="lounge-media-title">
+                🎬 <span>${escapeHtml(videoTitle)}</span>
+              </div>
+              <div class="lounge-host-tag">
+                👤 Room by <strong>${escapeHtml(hostName)}</strong>
+              </div>
+              <div class="participant-avatars-cluster">
+                ${avatarImgs}
+                <span class="participant-more">+</span>
+              </div>
+            </div>
+            <a href="/room/${encodeURIComponent(room.id)}" class="btn-enter-theater">
+              <span>Enter Theater →</span>
+            </a>
+          </div>
+        `;
+      }).join('');
+    } else {
       container.innerHTML = `
-        <div class="room-preview-card" style="grid-column: 1 / -1; text-align: center; padding: 2.5rem 1rem;">
-          <div style="font-size: 2.2rem; margin-bottom: 0.5rem;">🍿</div>
-          <h3 style="font-size: 1.1rem; margin-bottom: 0.4rem;">No Active Public Lounges Right Now</h3>
-          <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1.25rem;">Start your own party and invite friends with a single click!</p>
-          <a href="#quick-start" class="btn btn-primary btn-sm">Launch a Room</a>
+        <div class="lounges-empty-state">
+          <div class="empty-icon-bubble">🍿</div>
+          <div class="empty-title">No Active Public Lounges Right Now</div>
+          <div class="empty-sub">Be the first to start a synchronized watch party! Create your room above.</div>
+          <a href="#quick-start" class="btn btn-party-action btn-purple-glow" style="max-width: 220px; margin-top: 1rem; height: 42px; font-size: 0.88rem;">
+            <span>✨ Create Watch Room →</span>
+          </a>
         </div>
       `;
-      return;
     }
-
-    container.innerHTML = data.rooms.map(room => `
-      <div class="room-preview-card">
-        <div>
-          <div class="room-card-header">
-            <h3 style="font-size: 1.05rem; font-weight: 700;">${escapeHtml(room.name)}</h3>
-            <span class="room-user-badge">
-              <span class="pulse-circle"></span>
-              ${room.userCount} watching
-            </span>
-          </div>
-          <p style="font-size: 0.82rem; color: var(--text-secondary); margin-top: 0.5rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-            🎬 ${escapeHtml(room.currentVideo?.title || 'Video')}
-          </p>
-        </div>
-        <a href="/room/${room.id}" class="btn btn-secondary btn-sm" style="width: 100%;">
-          Enter Theater
-        </a>
-      </div>
-    `).join('');
   } catch (err) {
-    console.error('Failed to fetch rooms', err);
+    console.warn('Could not fetch active rooms:', err);
   }
 }
 

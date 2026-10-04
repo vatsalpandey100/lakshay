@@ -134,6 +134,7 @@ function getOrCreateRoom(roomId, roomName = null) {
         playbackRate: 1.0
       },
       queue: [],
+      activePoll: null,
       reactionCounts: {},
       users: new Map(), // socketId -> userData
       messages: savedMessages && savedMessages.length > 0 ? savedMessages : [
@@ -167,11 +168,14 @@ app.get('/api/rooms', (req, res) => {
   const publicRooms = [];
   for (const [id, room] of rooms.entries()) {
     if (room.users.size > 0) {
+      const userAvatars = Array.from(room.users.values()).map(u => u.avatar).filter(Boolean).slice(0, 5);
       publicRooms.push({
         id: room.id,
-        name: room.name,
+        name: room.name || `Party ${room.id}`,
         userCount: room.users.size,
-        currentVideo: room.currentVideo,
+        hostName: room.hostName || 'Host',
+        avatars: userAvatars,
+        currentVideo: room.currentVideo || { title: 'Watch Party Video', thumbnail: '/lounge-thumb.jpg' },
         playbackState: room.playback.state
       });
     }
@@ -415,6 +419,29 @@ io.on('connection', (socket) => {
           currentTime: accurateTime
         },
         queue: room.queue,
+        activePoll: room.activePoll ? {
+          id: room.activePoll.id,
+          question: room.activePoll.question,
+          options: (room.activePoll.resultsRevealed || isThisUserHost)
+            ? room.activePoll.options.map(opt => ({
+                id: opt.id,
+                text: opt.text,
+                votes: opt.votes || 0,
+                percentage: (room.activePoll.resultsRevealed && room.activePoll.voters && room.activePoll.voters.size > 0)
+                  ? Math.round((opt.votes / room.activePoll.voters.size) * 100)
+                  : 0
+              }))
+            : room.activePoll.options.map(o => ({ id: o.id, text: o.text })),
+          durationSeconds: room.activePoll.durationSeconds,
+          createdAt: room.activePoll.createdAt,
+          endsAt: room.activePoll.endsAt,
+          createdBy: room.activePoll.createdBy,
+          resultsRevealed: room.activePoll.resultsRevealed,
+          isClosed: room.activePoll.isClosed,
+          totalVotes: room.activePoll.voters ? room.activePoll.voters.size : 0,
+          hasVoted: room.activePoll.voters ? room.activePoll.voters.has(socket.id) : false,
+          votedOptionId: room.activePoll.voters ? (room.activePoll.voters.get(socket.id) ?? null) : null
+        } : null,
         reactionCounts: room.reactionCounts || {},
         users: Array.from(room.users.values()),
         messages: room.messages.slice(-100)
@@ -736,6 +763,189 @@ io.on('connection', (socket) => {
       burst: inc,
       id: `react-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`
     });
+  });
+
+  // =========================================================================
+  // Live Room Poll Engine (Host-Only Creation & Reveal Control)
+  // =========================================================================
+
+  // Create Poll: Only Host can send
+  socket.on('create-poll', ({ question, options, durationSeconds }) => {
+    if (!currentRoomId || !rooms.has(currentRoomId)) return;
+    const room = rooms.get(currentRoomId);
+
+    if (!isUserHost(room, socket.id, currentUser?.username)) {
+      socket.emit('error-msg', { message: 'Only the host can create and send polls.' });
+      return;
+    }
+
+    const q = (question || '').trim().substring(0, 200);
+    if (!q) {
+      socket.emit('error-msg', { message: 'Please enter a poll question.' });
+      return;
+    }
+
+    const validOptions = (Array.isArray(options) ? options : [])
+      .map(opt => String(opt || '').trim().substring(0, 100))
+      .filter(opt => opt.length > 0);
+
+    if (validOptions.length < 2) {
+      socket.emit('error-msg', { message: 'Poll must have at least 2 options.' });
+      return;
+    }
+
+    const dur = Math.max(5, Math.min(600, parseInt(durationSeconds, 10) || 30));
+    const now = Date.now();
+    const pollId = `poll-${now}-${Math.random().toString(36).substr(2, 5)}`;
+
+    room.activePoll = {
+      id: pollId,
+      question: q,
+      options: validOptions.map((text, idx) => ({ id: idx, text, votes: 0 })),
+      durationSeconds: dur,
+      createdAt: now,
+      endsAt: now + dur * 1000,
+      createdBy: currentUser ? currentUser.username : 'Host',
+      voters: new Map(), // socketId -> optionId
+      resultsRevealed: false,
+      isClosed: false
+    };
+
+    const pollSysMsg = {
+      id: `sys-${now}-poll`,
+      system: true,
+      text: `📊 ${currentUser?.username || 'Host'} started a live poll: "${q}" (${dur}s)`,
+      timestamp: now
+    };
+    room.messages.push(pollSysMsg);
+    savePersistedMessages(currentRoomId, room.messages);
+
+    // Broadcast poll to all viewers in the room!
+    io.to(currentRoomId).emit('poll-started', {
+      poll: {
+        id: pollId,
+        question: q,
+        options: room.activePoll.options.map(o => ({ id: o.id, text: o.text })),
+        durationSeconds: dur,
+        createdAt: now,
+        endsAt: room.activePoll.endsAt,
+        createdBy: room.activePoll.createdBy,
+        resultsRevealed: false,
+        isClosed: false,
+        totalVotes: 0
+      },
+      message: pollSysMsg
+    });
+  });
+
+  // Vote on active poll
+  socket.on('vote-poll', ({ pollId, optionId }) => {
+    if (!currentRoomId || !rooms.has(currentRoomId)) return;
+    const room = rooms.get(currentRoomId);
+
+    if (!room.activePoll || room.activePoll.id !== pollId) {
+      socket.emit('error-msg', { message: 'This poll is no longer active.' });
+      return;
+    }
+
+    if (room.activePoll.isClosed) {
+      socket.emit('error-msg', { message: 'Voting has closed for this poll.' });
+      return;
+    }
+
+    if (room.activePoll.voters.has(socket.id)) {
+      socket.emit('error-msg', { message: 'You have already voted in this poll.' });
+      return;
+    }
+
+    const opt = room.activePoll.options.find(o => o.id === optionId);
+    if (!opt) {
+      socket.emit('error-msg', { message: 'Invalid option selected.' });
+      return;
+    }
+
+    opt.votes = (opt.votes || 0) + 1;
+    room.activePoll.voters.set(socket.id, optionId);
+
+    // Confirm vote to this user
+    socket.emit('poll-vote-confirmed', {
+      pollId,
+      optionId,
+      totalVotes: room.activePoll.voters.size
+    });
+
+    // Notify room of vote count update
+    io.to(currentRoomId).emit('poll-vote-update', {
+      pollId,
+      totalVotes: room.activePoll.voters.size,
+      hostOptions: room.activePoll.options
+    });
+  });
+
+  // Reveal Poll Results: Host taps "Show Results" and it appears to ALL viewers
+  socket.on('reveal-poll-results', ({ pollId }) => {
+    if (!currentRoomId || !rooms.has(currentRoomId)) return;
+    const room = rooms.get(currentRoomId);
+
+    if (!isUserHost(room, socket.id, currentUser?.username)) {
+      socket.emit('error-msg', { message: 'Only hosts can reveal poll results.' });
+      return;
+    }
+
+    if (!room.activePoll || room.activePoll.id !== pollId) {
+      socket.emit('error-msg', { message: 'Poll not found or already closed.' });
+      return;
+    }
+
+    room.activePoll.resultsRevealed = true;
+    const totalVotes = room.activePoll.voters.size;
+
+    let maxVotes = -1;
+    room.activePoll.options.forEach(opt => {
+      if (opt.votes > maxVotes) maxVotes = opt.votes;
+    });
+
+    const enrichedOptions = room.activePoll.options.map(opt => ({
+      ...opt,
+      percentage: totalVotes > 0 ? Math.round((opt.votes / totalVotes) * 100) : 0,
+      isWinner: totalVotes > 0 && opt.votes === maxVotes && maxVotes > 0
+    }));
+
+    const resultMsg = {
+      id: `sys-${Date.now()}-pollres`,
+      system: true,
+      text: `📊 Poll results revealed: "${room.activePoll.question}" (${totalVotes} votes total).`,
+      timestamp: Date.now()
+    };
+    room.messages.push(resultMsg);
+    savePersistedMessages(currentRoomId, room.messages);
+
+    // Broadcast revealed results to ALL viewers in the room!
+    io.to(currentRoomId).emit('poll-results-revealed', {
+      pollId,
+      question: room.activePoll.question,
+      options: enrichedOptions,
+      totalVotes,
+      revealedBy: currentUser?.username || 'Host',
+      message: resultMsg
+    });
+  });
+
+  // Close / Dismiss Poll (Host Only)
+  socket.on('close-poll', ({ pollId }) => {
+    if (!currentRoomId || !rooms.has(currentRoomId)) return;
+    const room = rooms.get(currentRoomId);
+
+    if (!isUserHost(room, socket.id, currentUser?.username)) {
+      socket.emit('error-msg', { message: 'Only hosts can close polls.' });
+      return;
+    }
+
+    if (room.activePoll && room.activePoll.id === pollId) {
+      room.activePoll.isClosed = true;
+      io.to(currentRoomId).emit('poll-closed', { pollId });
+      room.activePoll = null;
+    }
   });
 
   // Toggle Host Only Lock
