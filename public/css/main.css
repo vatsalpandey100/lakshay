@@ -1,4 +1,5 @@
 :root {
+  color-scheme: dark !important;
   --bg-main: #06070b;
   --bg-surface: #0c0d16;
   --bg-card: rgba(18, 20, 34, 0.72);
@@ -126,16 +127,16 @@ body {
 }
 
 .btn-secondary {
-  background: rgba(255, 255, 255, 0.06);
-  color: #f1f5f9;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  backdrop-filter: blur(10px);
+  background: #141728 !important;
+  color: #f1f5f9 !important;
+  border: 1px solid rgba(255, 255, 255, 0.16) !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
 }
 
 .btn-secondary:hover {
-  background: rgba(255, 255, 255, 0.12);
-  border-color: rgba(255, 255, 255, 0.22);
-  color: #ffffff;
+  background: #1c2035 !important;
+  border-color: rgba(139, 92, 246, 0.45) !important;
+  color: #ffffff !important;
   transform: translateY(-1px);
 }
 
@@ -207,32 +208,46 @@ body {
 }
 
 /* Base Input Styles (Preventing default white user-agent styling) */
-input, select, textarea {
+button, input, select, textarea {
   font-family: inherit;
   color: #f1f5f9;
+  -webkit-appearance: none;
+  appearance: none;
 }
 
 .input-field {
   width: 100%;
-  background: rgba(10, 12, 22, 0.85);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: #0d0f1b !important;
+  border: 1px solid rgba(255, 255, 255, 0.16) !important;
   border-radius: var(--radius-md);
   padding: 0.75rem 1rem;
-  color: #f1f5f9;
+  color: #f1f5f9 !important;
   font-family: inherit;
   font-size: 0.92rem;
   outline: none;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.4);
   transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
 }
 
 .input-field::placeholder {
-  color: #64748b;
+  color: #64748b !important;
 }
 
 .input-field:focus {
-  border-color: var(--accent-purple);
-  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.25);
-  background: rgba(12, 14, 26, 0.95);
+  border-color: var(--accent-purple) !important;
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.25), inset 0 2px 4px rgba(0, 0, 0, 0.4) !important;
+  background: #111322 !important;
+}
+
+/* Chrome / Safari / Edge Autofill Dark Override (Prevents inputs from turning white) */
+input:-webkit-autofill,
+input:-webkit-autofill:hover, 
+input:-webkit-autofill:focus, 
+input:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 1000px #0d0f1b inset !important;
+  -webkit-text-fill-color: #f1f5f9 !important;
+  caret-color: #f1f5f9 !important;
+  transition: background-color 5000s ease-in-out 0s;
 }
 
 /* ==========================================================================
