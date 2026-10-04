@@ -3856,13 +3856,19 @@
         }
       });
 
-      if (remainingSec <= 0 && !currentActivePoll.resultsRevealed) {
-        const votingNotices = document.querySelectorAll('.poll-status-msg');
-        votingNotices.forEach(notice => {
-          if (!hasVotedCurrentPoll) {
-            notice.textContent = '⏱️ Voting closed. Waiting for host to reveal results...';
-          }
-        });
+      if (remainingSec <= 0) {
+        // If user tapped an option and time ends, finish the poll with that option chosen!
+        if (!hasVotedCurrentPoll && tentativePollOptionId !== null && !currentActivePoll.resultsRevealed && !currentActivePoll.isClosed) {
+          const autoChosenId = tentativePollOptionId;
+          const chosenOpt = (currentActivePoll.options || []).find(o => o.id === autoChosenId);
+          submitPollVote(autoChosenId);
+          showToast(`⏱️ Time ended! Your vote for "${chosenOpt?.text || 'selected option'}" was submitted.`);
+        } else if (!hasVotedCurrentPoll && !currentActivePoll.resultsRevealed) {
+          const votingNotices = document.querySelectorAll('.poll-status-msg');
+          votingNotices.forEach(notice => {
+            notice.textContent = '⏱️ Voting ended. Waiting for host to reveal results...';
+          });
+        }
       }
     };
 
@@ -3932,7 +3938,9 @@
 
     // Build options HTML
     const optionsHtml = (currentActivePoll.options || []).map(opt => {
-      const isSelected = selectedPollOptionId === opt.id;
+      const isConfirmedSelected = selectedPollOptionId === opt.id;
+      const isTentativeSelected = !hasVotedCurrentPoll && tentativePollOptionId === opt.id;
+      const isSelected = isConfirmedSelected || isTentativeSelected;
       const isWinner = isRevealed && opt.isWinner;
       const pct = opt.percentage || 0;
 
@@ -3956,13 +3964,21 @@
       }
 
       const disabledClass = (hasVotedCurrentPoll || isTimeExpired || isRevealed) ? 'poll-opt-disabled' : '';
+      const tentativeClass = isTentativeSelected ? 'tentative-selected' : '';
+
+      let radioContent = '';
+      if (isConfirmedSelected) {
+        radioContent = '✓';
+      } else if (isTentativeSelected) {
+        radioContent = '●';
+      }
 
       return `
-        <div class="poll-opt-card ${isSelected ? 'selected' : ''} ${isWinner ? 'winner' : ''} ${disabledClass}" data-option-id="${opt.id}" data-location="${location}">
+        <div class="poll-opt-card ${isSelected ? 'selected' : ''} ${tentativeClass} ${isWinner ? 'winner' : ''} ${disabledClass}" data-option-id="${opt.id}" data-location="${location}">
           ${fillBar}
           <div class="poll-opt-content">
             <div class="poll-opt-label-wrap">
-              <span class="poll-opt-radio">${isSelected ? '✓' : ''}</span>
+              <span class="poll-opt-radio">${radioContent}</span>
               <span class="poll-opt-text">${escapeHtml(opt.text)}</span>
               ${isWinner ? '<span class="poll-winner-badge">👑 Winner</span>' : ''}
             </div>
@@ -3972,16 +3988,34 @@
       `;
     }).join('');
 
+    // Submit Action Prompt when an option is selected but not yet confirmed
+    let submitActionHtml = '';
+    if (!hasVotedCurrentPoll && !isTimeExpired && !isRevealed && tentativePollOptionId !== null) {
+      const chosenOpt = (currentActivePoll.options || []).find(o => o.id === tentativePollOptionId);
+      submitActionHtml = `
+        <div class="poll-submit-action-wrap">
+          <button type="button" class="btn-poll-submit-confirm btn-trigger-submit-vote" data-location="${location}">
+            <span>✓ Submit Vote (${escapeHtml(chosenOpt?.text || 'Option')})</span>
+          </button>
+          <div class="poll-submit-auto-hint">⏱️ Will automatically submit with this option when timer ends</div>
+        </div>
+      `;
+    }
+
     // Status Message
     let statusMsg = '';
     if (isRevealed) {
       statusMsg = `<span style="color: #c084fc; font-weight: 600;">🎉 Results Revealed! (${totalVotes} total votes)</span>`;
     } else if (hasVotedCurrentPoll) {
-      statusMsg = `<div class="poll-voted-notice"><span>✓</span><span>Vote submitted! Waiting for host to reveal results...</span></div>`;
+      const chosenOpt = (currentActivePoll.options || []).find(o => o.id === selectedPollOptionId);
+      statusMsg = `<div class="poll-voted-notice"><span>✓</span><span>Vote submitted${chosenOpt ? ` for "${escapeHtml(chosenOpt.text)}"` : ''}! Waiting for host to reveal results...</span></div>`;
     } else if (isTimeExpired) {
       statusMsg = `<span class="poll-status-msg" style="color: var(--text-muted);">⏱️ Voting ended. Waiting for host to reveal results...</span>`;
+    } else if (tentativePollOptionId !== null) {
+      const chosenOpt = (currentActivePoll.options || []).find(o => o.id === tentativePollOptionId);
+      statusMsg = `<span class="poll-tentative-status">Selected: <strong>${escapeHtml(chosenOpt?.text || '')}</strong> — Tap Submit to confirm</span>`;
     } else {
-      statusMsg = `<span class="poll-status-msg" style="color: var(--text-secondary);">Tap an option to cast your vote</span>`;
+      statusMsg = `<span class="poll-status-msg" style="color: var(--text-secondary);">Tap an option to select your vote</span>`;
     }
 
     // Host Action Bar (Prominent Show Result & Close buttons)
@@ -4041,6 +4075,8 @@
             ${optionsHtml}
           </div>
 
+          ${submitActionHtml}
+
           <div class="poll-footer-meta">
             <div>${statusMsg}</div>
             <div style="font-weight: 600; color: var(--text-secondary);">${totalVotes} ${totalVotes === 1 ? 'vote' : 'votes'}</div>
@@ -4057,15 +4093,35 @@
     const root = document.getElementById(rootId);
     if (!root) return;
 
-    // Option Voting Click
+    // Option Click: Tentatively select option and prompt to submit
     const optionCards = root.querySelectorAll('.poll-opt-card:not(.poll-opt-disabled)');
     optionCards.forEach(card => {
       card.addEventListener('click', () => {
         if (hasVotedCurrentPoll) return;
+        const now = Date.now();
+        if (currentActivePoll && (currentActivePoll.isClosed || now > currentActivePoll.endsAt + 1000)) {
+          showToast('⚠️ Voting has ended for this poll.');
+          return;
+        }
         const optId = parseInt(card.dataset.optionId, 10);
-        submitPollVote(optId);
+        tentativePollOptionId = optId;
+        playUiTone('pop');
+        renderPollCards();
       });
     });
+
+    // Confirm Submit Vote Button Click
+    const submitBtn = root.querySelector('.btn-trigger-submit-vote');
+    if (submitBtn) {
+      submitBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (tentativePollOptionId !== null && !hasVotedCurrentPoll) {
+          const chosenOpt = (currentActivePoll.options || []).find(o => o.id === tentativePollOptionId);
+          submitPollVote(tentativePollOptionId);
+          showToast(`✓ Vote submitted for "${chosenOpt?.text || 'selected option'}"!`);
+        }
+      });
+    }
 
     // Reveal Results Button (Host Only)
     const revealBtns = root.querySelectorAll('.btn-trigger-reveal');
@@ -4104,13 +4160,14 @@
   function submitPollVote(optionId) {
     if (!currentActivePoll || hasVotedCurrentPoll) return;
     const now = Date.now();
-    if (currentActivePoll.isClosed || now > currentActivePoll.endsAt + 1000) {
+    if (currentActivePoll.isClosed || now > currentActivePoll.endsAt + 3000) {
       showToast('⚠️ Voting has already ended for this poll.');
       return;
     }
 
     hasVotedCurrentPoll = true;
     selectedPollOptionId = optionId;
+    tentativePollOptionId = null;
     currentActivePoll.totalVotes = (currentActivePoll.totalVotes || 0) + 1;
 
     // Locally bump count for fast feedback
@@ -4127,7 +4184,6 @@
     }
 
     renderPollCards();
-    showToast('✓ Vote submitted! Waiting for host to reveal results.');
   }
 
   function handleVoteConfirmed(pollId, optionId, totalVotes) {
@@ -4148,6 +4204,10 @@
   }
 
   function handlePollResultsRevealed(resultsData) {
+    if (!hasVotedCurrentPoll && tentativePollOptionId !== null) {
+      submitPollVote(tentativePollOptionId);
+    }
+
     if (!currentActivePoll || currentActivePoll.id !== resultsData.pollId) {
       currentActivePoll = {
         id: resultsData.pollId,
@@ -4189,6 +4249,7 @@
     currentActivePoll = null;
     hasVotedCurrentPoll = false;
     selectedPollOptionId = null;
+    tentativePollOptionId = null;
   }
 
   // Initialize Poll UI Module
